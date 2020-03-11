@@ -14,6 +14,8 @@ use rdkafka::config::ClientConfig;
 use rdkafka::producer::FutureProducer;
 use rdkafka::producer::FutureRecord;
 use differential_dataflow::trace::implementations::ord::OrdKeyBatch;
+use differential_dataflow::trace::BatchReader;
+use differential_dataflow::trace::cursor::Cursor;
 use timely::dataflow::channels::pact::Pipeline;
 use timely::dataflow::operators::generic::Operator;
 use timely::dataflow::{Scope, Stream};
@@ -73,11 +75,17 @@ pub fn kafka<G>(
                 let encoder = Encoder::new(&schema.to_string());
                 input.for_each(|_, batches| {
                     for batch in batches.iter() {
+                        let mut cursor = batch.cursor();
 
-                        let buf = encoder.encode(schema_id, row);
-                        let record: FutureRecord<&Vec<u8>, _> =
-                            FutureRecord::to(&connector.topic).payload(&buf);
-                        producer.send(record, 1000 /* block_ms */);
+                        while cursor.key_valid(&batch) {
+                            let row = cursor.key(&batch);
+
+                            let buf = encoder.encode(schema_id, row);
+                            let record: FutureRecord<&Vec<u8>, _> =
+                                FutureRecord::to(&connector.topic).payload(&buf);
+                            producer.send(record, 1000 /* block_ms */);
+                            cursor.step_key(&batch);
+                        }
                     }
                 })
             })
