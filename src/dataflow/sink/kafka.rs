@@ -7,10 +7,13 @@
 // the Business Source License, use of this software will be governed
 // by the Apache License, Version 2.0.
 
+use std::rc::Rc;
+
 use log::error;
 use rdkafka::config::ClientConfig;
 use rdkafka::producer::FutureProducer;
 use rdkafka::producer::FutureRecord;
+use differential_dataflow::trace::implementations::ord::OrdKeyBatch;
 use timely::dataflow::channels::pact::Pipeline;
 use timely::dataflow::operators::generic::Operator;
 use timely::dataflow::{Scope, Stream};
@@ -48,7 +51,7 @@ use repr::{RelationDesc, Row};
 //              the user has configured their Kafka instance to automatically
 //              create new topics.
 pub fn kafka<G>(
-    stream: &Stream<G, (Row, Timestamp, Diff)>,
+    stream: &Stream<G, Rc<OrdKeyBatch<Row, Timestamp, Diff>>>,
     id: GlobalId,
     connector: KafkaSinkConnector,
     relation_desc: RelationDesc,
@@ -68,8 +71,9 @@ pub fn kafka<G>(
 
             stream.sink(Pipeline, &format!("kafka-{}", id), move |input| {
                 let encoder = Encoder::new(&schema.to_string());
-                input.for_each(|_, rows| {
-                    for (row, _time, _diff) in rows.iter() {
+                input.for_each(|_, batches| {
+                    for batch in batches.iter() {
+
                         let buf = encoder.encode(schema_id, row);
                         let record: FutureRecord<&Vec<u8>, _> =
                             FutureRecord::to(&connector.topic).payload(&buf);

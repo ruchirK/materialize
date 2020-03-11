@@ -16,8 +16,7 @@ use differential_dataflow::lattice::Lattice;
 use differential_dataflow::operators::arrange::arrangement::Arrange;
 use differential_dataflow::operators::arrange::arrangement::ArrangeByKey;
 use differential_dataflow::operators::join::JoinCore;
-use differential_dataflow::operators::consolidate::Consolidate;
-use differential_dataflow::trace::implementations::ord::OrdValSpine;
+use differential_dataflow::trace::implementations::ord::{OrdKeySpine, OrdValSpine};
 use differential_dataflow::{AsCollection, Collection};
 use timely::communication::Allocate;
 use timely::dataflow::operators::unordered_input::UnorderedInput;
@@ -430,13 +429,14 @@ pub(crate) fn build_dataflow<A: Allocate>(
                     ))
                     .expect("No arrangements");
 
-                let consolidated = collection.consolidate();
-
                 match sink.connector {
                     SinkConnector::Kafka(c) => {
-                        sink::kafka(&consolidated.inner, sink_id, c, sink.from.1)
+                        let batches = collection.map(|k| (k, ()))
+                            .arrange::<OrdKeySpine<_,_,_>>();
+
+                        sink::kafka(&batches.stream, sink_id, c, sink.from.1)
                     }
-                    SinkConnector::Tail(c) => sink::tail(&consolidated.inner, sink_id, c),
+                    SinkConnector::Tail(c) => sink::tail(&collection.inner, sink_id, c),
                 }
                 dataflow_drops.insert(sink_id, Box::new(tokens));
             }
