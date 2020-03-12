@@ -9,13 +9,13 @@
 
 use std::rc::Rc;
 
+use differential_dataflow::trace::cursor::Cursor;
+use differential_dataflow::trace::implementations::ord::OrdKeyBatch;
+use differential_dataflow::trace::BatchReader;
 use log::error;
 use rdkafka::config::ClientConfig;
 use rdkafka::producer::FutureProducer;
 use rdkafka::producer::FutureRecord;
-use differential_dataflow::trace::implementations::ord::OrdKeyBatch;
-use differential_dataflow::trace::BatchReader;
-use differential_dataflow::trace::cursor::Cursor;
 use timely::dataflow::channels::pact::Pipeline;
 use timely::dataflow::operators::generic::Operator;
 use timely::dataflow::{Scope, Stream};

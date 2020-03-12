@@ -431,8 +431,9 @@ pub(crate) fn build_dataflow<A: Allocate>(
 
                 match sink.connector {
                     SinkConnector::Kafka(c) => {
-                        let batches = collection.map(|k| (k, ()))
-                            .arrange::<OrdKeySpine<_,_,_>>();
+                        let batches = collection
+                            .map(|k| (k, ()))
+                            .arrange::<OrdKeySpine<_, _, _>>();
 
                         sink::kafka(&batches.stream, sink_id, c, sink.from.1)
                     }
