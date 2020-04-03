@@ -12,6 +12,9 @@ use std::io::{Cursor, Write};
 use std::path;
 
 use avro::Writer;
+use futures::executor::block_on;
+use retry::delay::Fibonacci;
+use tokio::stream::StreamExt;
 
 use crate::action::{Action, State};
 use crate::parser::BuiltinCommand;
@@ -114,4 +117,58 @@ where
         .flush()
         .map_err(|e| format!("flushing avro writer: {}", e))?;
     Ok(())
+}
+
+pub struct VerifyAction {
+    sink: String,
+    //schema: String,
+    records: Vec<String>,
+}
+
+pub fn build_verify(mut cmd: BuiltinCommand) -> Result<VerifyAction, String> {
+    let sink = cmd.args.string("sink")?;
+    //let schema = cmd.args.string("schema")?;
+    let records = cmd.input;
+    cmd.args.done()?;
+    if sink.contains(path::MAIN_SEPARATOR) {
+        // The goal isn't security, but preventing mistakes.
+        return Err("separators in file sink names are forbidden".into());
+    }
+    Ok(VerifyAction {
+        sink,
+        //schema,
+        records,
+    })
+}
+
+impl Action for VerifyAction {
+    fn undo(&self, _state: &mut State) -> Result<(), String> {
+        Ok(())
+    }
+    
+    fn redo(&self, state: &mut State) -> Result<(), String> {
+        let path: String = retry::retry(Fibonacci::from_millis(100).take(5), || {
+            let row = state.pgclient.query_one(
+                "SELECT path FROM mz_catalog_names NATURAL JOIN mz_avro_ocf_sinks \
+                 WHERE name = $1",
+                &[&self.sink],
+            )?;
+            Ok::<_, postgres::Error>(row.get("path"))
+        })
+        .map_err(|e| format!("retrieving path: {:?}", e))?;
+
+        println!("Verifying results in file {}", path);
+        println!("temp_dir {}", state.temp_dir.path().display());
+
+        // Get the rows from this file
+        let sink_file = state.tokio_runtime.block_on(tokio::fs::File::open(&path)).map_err(|e| format!("reading sink file {}: {}", path, e))?;
+        let reader = state.tokio_runtime.block_on(avro::Reader::new(sink_file)).map_err(|e| format!("parsing avro values from file: {}", e))?;
+        let actual_values : Vec<_> = state.tokio_runtime.block_on(reader.into_stream().collect());
+
+        for value in actual_values {
+            println!("{:?}", value);
+        }
+
+        Ok(())
+    }
 }

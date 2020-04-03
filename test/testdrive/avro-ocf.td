@@ -144,3 +144,8 @@ date          NO      date
 ts            NO      timestamp
 ts_tz         NO      timestamp
 mz_obj_no     NO      int8
+
+> CREATE SINK basic_sink FROM basic
+  INTO AVRO OCF '${testdrive.temp-dir}/basic-sink.ocf'
+
+$ avro-ocf-verify sink=materialize.public.basic_sink
