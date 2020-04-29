@@ -134,6 +134,24 @@ where
         }
     }
 
+    pub fn arrangement_or_arrange_collection(
+        &self,
+        relation_expr: &P,
+    ) -> Option<ArrangementFlavor<S, V, T>> {
+        if let Some(local) = self.local.get(relation_expr) {
+            let (oks, errs) = local.values().next().expect("Empty arrangement");
+            Some(ArrangementFlavor::Local(oks.clone(), errs.clone()))
+        } else if let Some(trace) = self.trace.get(relation_expr) {
+            let (gid, oks, errs) = trace.values().next().expect("Empty arrangement");
+            Some(ArrangementFlavor::Trace(*gid, oks.clone(), errs.clone()))
+        } else if let Some(_collection) = self.collections.get(relation_expr) {
+            // TODO
+            None
+        } else {
+            None
+        }
+    }
+
     /// Convenience method for accessing `arrangement` when all keys are plain columns
     pub fn arrangement_columns(
         &self,
