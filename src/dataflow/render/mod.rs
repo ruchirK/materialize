@@ -631,32 +631,43 @@ pub(crate) fn build_dataflow<A: Allocate>(
                     }
                 }
                 let tokens = Rc::new((needed_source_tokens, needed_index_tokens));
-                let (collection, _err_collection) = context
-                    .collection(&RelationExpr::global_get(
-                        sink.from.0,
-                        sink.from.1.typ().clone(),
-                    ))
-                    .expect("Sink source collection not loaded");
+                let arrangement = context.arrangement_or_arrange_collection(
+                    &RelationExpr::global_get(sink.from.0, sink.from.1.typ().clone()),
+                );
+                //.expect("Sink source collection not loaded");
 
                 // TODO(frank): consolidation is only required for a collection,
                 // not for arrangements. We can perform a more complicated match
                 // here to determine which case we are in to avoid this call.
-                use differential_dataflow::operators::consolidate::Consolidate;
-                let collection = collection.consolidate();
+                //use differential_dataflow::operators::consolidate::Consolidate;
+                //let collection = collection.consolidate();
 
                 // TODO(benesch): errors should stream out through the sink,
                 // if we figure out a protocol for that.
 
-                match sink.connector {
-                    SinkConnector::Kafka(c) => {
-                        sink::kafka(&collection.inner, sink_id, c, sink.from.1)
+                match arrangement {
+                    Some(ArrangementFlavor::Local(oks, _)) => {
+                        match sink.connector {
+                            SinkConnector::Kafka(c) => sink::kafka(
+                                &oks.as_collection(|_, v| v.clone()).inner,
+                                sink_id,
+                                c,
+                                sink.from.1,
+                            ),
+                            SinkConnector::Tail(c) => {
+                                sink::tail(&oks.as_collection(|_, v| v.clone()).inner, sink_id, c)
+                            }
+                            SinkConnector::AvroOcf(c) => sink::avro_ocf(
+                                &oks.as_collection(|_, v| v.clone()).inner,
+                                sink_id,
+                                c,
+                                sink.from.1,
+                            ),
+                        }
+                        dataflow_drops.insert(sink_id, Box::new(tokens));
                     }
-                    SinkConnector::Tail(c) => sink::tail(&collection.inner, sink_id, c),
-                    SinkConnector::AvroOcf(c) => {
-                        sink::avro_ocf(&collection.inner, sink_id, c, sink.from.1)
-                    }
+                    _ => panic!("no arrangements available"),
                 }
-                dataflow_drops.insert(sink_id, Box::new(tokens));
             }
         });
     })
