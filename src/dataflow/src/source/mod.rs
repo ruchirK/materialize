@@ -630,6 +630,13 @@ impl ConsistencyInfo {
             }
         }
     }
+    
+    fn find_matching_rt_timestamp(
+        &self,
+    ) -> Timestamp {
+        assert_eq!(Consistency::RealTime, self.source_type);
+        self.last_closed_ts + 1
+    }
 }
 
 /// Source-specific Prometheus metrics
@@ -818,13 +825,22 @@ where
 
             if active {
                 if !read_persisted_files {
-                    while let Some(mut msgs) = source_info.read_persisted_files(
+                    if let Some(mut msgs) = source_info.read_persisted_files(
                         &persisted_files,
                         persisted_records_buf.take().unwrap(),
                     ) {
                         info!("processing {} records (worker: {})", msgs.len(), worker_id);
+                                    consistency_info.downgrade_capability(
+                                        &id,
+                                        cap,
+                                        source_info,
+                                        &timestamp_histories,
+                                    );
+                            let ts = consistency_info.find_matching_rt_timestamp();
                         while let Some(m) = msgs.pop() {
-                            let ts_cap = cap.delayed(&m.2);
+                            // TODO this is a total hack
+                            // want to see if having many timestamps is part of the problem
+                            let ts_cap = cap.delayed(&ts);
                             output.session(&ts_cap).give(Ok(SourceOutput::new(
                                 m.0,
                                 m.1,
@@ -835,10 +851,15 @@ where
                         // TODO figure this out better
                         // I think we need to yield to give this a chance to process
                         persisted_records_buf = Some(msgs);
+            activator.activate_after(Duration::from_millis(
+                consistency_info.downgrade_capability_frequency,
+            ));
+                        return SourceStatus::Alive;
+                    } else {
+                    
+                        info!("Finished reading persistence data (worker: {})", worker_id);
+                        read_persisted_files = true;
                     }
-
-                    info!("Finished reading persistence data (worker: {})", worker_id);
-                    read_persisted_files = true;
                 }
 
                 // Bound execution of operator to prevent a single operator from hogging
