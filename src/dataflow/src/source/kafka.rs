@@ -396,6 +396,7 @@ impl SourceInfo<Vec<u8>> for KafkaSourceInfo {
                 );
                 return Some(buf);
             } else {
+                self.persistence_read_buffer.shrink_to_fit();
                 return None;
             }
         }
