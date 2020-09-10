@@ -26,7 +26,7 @@ use timely::dataflow::{
 use dataflow_types::{Consistency, DataEncoding, ExternalSourceConnector, MzOffset, SourceError};
 use expr::{PartitionId, SourceInstanceId};
 use lazy_static::lazy_static;
-use log::error;
+use log::{error, info};
 use prometheus::core::{AtomicI64, AtomicU64};
 use prometheus::{
     register_int_counter, register_int_counter_vec, register_int_gauge_vec,
@@ -317,11 +317,15 @@ pub trait SourceInfo<Out> {
 
     /// Read back any files we previously persisted
     /// TODO(rkhaitan): clean this up to return a proper type and potentially a iterator.
-    fn read_persisted_files(&self, files: &[PathBuf]) -> Vec<(Vec<u8>, Out, Timestamp, i64)> {
+    fn read_persisted_files(
+        &mut self,
+        files: &[PathBuf],
+        mut _buf: Vec<(Vec<u8>, Out, Timestamp, i64)>,
+    ) -> Option<Vec<(Vec<u8>, Out, Timestamp, i64)>> {
         if !files.is_empty() {
             error!("unimplemented: this source does not support reading persisted files");
         }
-        vec![]
+        None
     }
 }
 
@@ -800,6 +804,7 @@ where
         );
 
         let mut read_persisted_files = false;
+        let mut persisted_records_buf = Some(Vec::with_capacity(1_000_000));
 
         move |cap, output| {
             // First check that the source was successfully created
@@ -813,13 +818,26 @@ where
 
             if active {
                 if !read_persisted_files {
-                    let msgs = source_info.read_persisted_files(&persisted_files);
-                    for m in msgs {
-                        let ts_cap = cap.delayed(&m.2);
-                        output
-                            .session(&ts_cap)
-                            .give(Ok(SourceOutput::new(m.0, m.1, Some(m.3))));
+                    while let Some(mut msgs) = source_info.read_persisted_files(
+                        &persisted_files,
+                        persisted_records_buf.take().unwrap(),
+                    ) {
+                        info!("processing {} records (worker: {})", msgs.len(), worker_id);
+                        while let Some(m) = msgs.pop() {
+                            let ts_cap = cap.delayed(&m.2);
+                            output.session(&ts_cap).give(Ok(SourceOutput::new(
+                                m.0,
+                                m.1,
+                                Some(m.3),
+                            )));
+                        }
+                        info!("done processing records (worker: {})", worker_id);
+                        // TODO figure this out better
+                        // I think we need to yield to give this a chance to process
+                        persisted_records_buf = Some(msgs);
                     }
+
+                    info!("Finished reading persistence data (worker: {})", worker_id);
                     read_persisted_files = true;
                 }
 

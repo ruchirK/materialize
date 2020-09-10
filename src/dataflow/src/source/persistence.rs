@@ -108,14 +108,14 @@ impl Record {
 }
 
 /// Iterator through a persisted set of records.
-pub struct RecordIter {
+pub struct RecordIter<'a> {
     /// Underlying data from which we read the records.
-    pub data: Vec<u8>,
+    pub data: &'a [u8],
     /// Offset into the data.
     pub offset: usize,
 }
 
-impl Iterator for RecordIter {
+impl<'a> Iterator for RecordIter<'a> {
     type Item = Record;
 
     fn next(&mut self) -> Option<Record> {

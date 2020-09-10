@@ -10,7 +10,8 @@
 use std::cmp;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::convert::TryInto;
-use std::fs;
+use std::fs::File;
+use std::io::Read;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -66,6 +67,10 @@ pub struct KafkaSourceInfo {
     worker_id: i32,
     /// Worker Count
     worker_count: i32,
+    /// Persisted files
+    persisted_files: Option<Vec<PathBuf>>,
+    /// Persistence read buffer
+    persistence_read_buffer: Vec<u8>,
 }
 
 impl SourceConstructor<Vec<u8>> for KafkaSourceInfo {
@@ -341,36 +346,61 @@ impl SourceInfo<Vec<u8>> for KafkaSourceInfo {
 
     // TODO(rkhaitan): reading files all in one shot like this could cause the system to become
     // unresponsive
-    fn read_persisted_files(&self, files: &[PathBuf]) -> Vec<(Vec<u8>, Vec<u8>, Timestamp, i64)> {
-        files
-            .iter()
-            .filter(|f| {
-                // We partition the given partitions up amongst workers, so we need to be
-                // careful not to process a partition that this worker was not allocated (or
-                // else we would process files multiple times).
-                match RecordFileMetadata::from_path(f) {
-                    Ok(Some(meta)) => {
-                        assert_eq!(self.source_global_id, meta.source_id);
-                        self.has_partition(meta.partition_id)
+    fn read_persisted_files(
+        &mut self,
+        files: &[PathBuf],
+        mut buf: Vec<(Vec<u8>, Vec<u8>, Timestamp, i64)>,
+    ) -> Option<Vec<(Vec<u8>, Vec<u8>, Timestamp, i64)>> {
+        buf.clear();
+        self.persistence_read_buffer.clear();
+        if self.persisted_files.is_none() {
+            self.persisted_files = Some(
+                files
+                    .iter()
+                    .filter(|f| {
+                        // We partition the given partitions up amongst workers, so we need to be
+                        // careful not to process a partition that this worker was not allocated (or
+                        // else we would process files multiple times).
+                        match RecordFileMetadata::from_path(f) {
+                            Ok(Some(meta)) => {
+                                assert_eq!(self.source_global_id, meta.source_id);
+                                self.has_partition(meta.partition_id)
+                            }
+                            _ => {
+                                error!("Failed to parse path: {}", f.display());
+                                false
+                            }
+                        }
+                    })
+                    .cloned()
+                    .collect(),
+            );
+        }
+
+        if let Some(files) = &mut self.persisted_files {
+            if let Some(f) = files.pop().as_ref() {
+                info!("worker: {} reading {}", self.worker_id, f.display());
+                let mut file = File::open(f).expect("file reads shouldn't fail");
+                file.read_to_end(&mut self.persistence_read_buffer).unwrap();
+                buf.extend(
+                    RecordIter {
+                        data: &self.persistence_read_buffer,
+                        offset: 0,
                     }
-                    _ => {
-                        error!("Failed to parse path: {}", f.display());
-                        false
-                    }
-                }
-            })
-            .flat_map(|f| {
-                let data = fs::read(f).unwrap_or_else(|e| {
-                    error!(
-                        "failed to read source persistence file {}: {}",
-                        f.display(),
-                        e
-                    );
-                    vec![]
-                });
-                RecordIter { data, offset: 0 }.map(|r| (r.key, r.value, r.timestamp, r.offset))
-            })
-            .collect()
+                    .map(|r| (r.key, r.value, r.timestamp, r.offset)),
+                );
+                info!(
+                    "worker: {} finished reading {}",
+                    self.worker_id,
+                    f.display()
+                );
+                return Some(buf);
+            } else {
+                return None;
+            }
+        }
+
+        None
     }
 
     fn persist_message(
@@ -446,6 +476,8 @@ impl KafkaSourceInfo {
             consumer: Arc::new(consumer),
             worker_id: worker_id.try_into().unwrap(),
             worker_count: worker_count.try_into().unwrap(),
+            persisted_files: None,
+            persistence_read_buffer: Vec::with_capacity(1_000_000),
         }
     }
 
