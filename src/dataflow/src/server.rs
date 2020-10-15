@@ -38,7 +38,6 @@ use timely::order::PartialOrder;
 use timely::progress::frontier::Antichain;
 use timely::progress::ChangeBatch;
 use timely::worker::Worker as TimelyWorker;
-use uuid::Uuid;
 
 use dataflow_types::logging::LoggingConfig;
 use dataflow_types::{
@@ -54,7 +53,7 @@ use crate::logging::materialized::MaterializedEvent;
 use crate::operator::CollectionExt;
 use crate::render::{self, RenderState};
 use crate::server::metrics::Metrics;
-use crate::source::persistence::WorkerPersistenceData;
+use crate::source::persistence::{PersistenceAddSource, WorkerPersistenceData};
 
 mod metrics;
 
@@ -166,7 +165,7 @@ pub enum PersistenceMessage {
     /// Data to be persisted (sent from dataflow workers)
     Data(WorkerPersistenceData),
     /// Add source to persist
-    AddSource(Uuid, GlobalId),
+    AddSource(PersistenceAddSource),
     /// Drop source to persist
     DropSource(GlobalId),
     /// Shut down persistence thread

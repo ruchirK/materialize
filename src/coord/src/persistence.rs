@@ -138,6 +138,7 @@ impl Source {
                     *partition_id,
                     prefix_start_offset,
                     prefix_end_offset,
+                    partition.last_persisted_offset.is_none(),
                 );
 
                 // We'll write down the data to a file with a `-tmp` prefix to
@@ -361,86 +362,88 @@ pub fn augment_connector(
                 // This connector has no persistence, so do nothing.
                 Ok(None)
             } else {
-                augment_connector_inner(connector, persistence_directory, cluster_id, source_id)?;
-                Ok(Some(source_connector))
+                match connector {
+                    ExternalSourceConnector::Kafka(k) => {
+                        if let Some((persisted_files, start_offsets)) =
+                            get_persistence_info(persistence_directory, cluster_id, source_id)?
+                        {
+                            k.start_offsets = start_offsets;
+                            k.persisted_files = Some(persisted_files);
+                            Ok(Some(source_connector))
+                        } else {
+                            Ok(None)
+                        }
+                    }
+                    _ => Ok(None),
+                }
             }
         }
         SourceConnector::Local => Ok(None),
     }
 }
 
-fn augment_connector_inner(
-    connector: &mut ExternalSourceConnector,
+pub fn get_persistence_info(
     persistence_directory: &Path,
     cluster_id: Uuid,
     source_id: GlobalId,
-) -> Result<(), anyhow::Error> {
-    match connector {
-        ExternalSourceConnector::Kafka(k) => {
-            let mut read_offsets: HashMap<i32, i64> = HashMap::new();
-            let mut paths = Vec::new();
+) -> Result<Option<(Vec<PathBuf>, HashMap<i32, i64>)>, anyhow::Error> {
+    let mut read_offsets: HashMap<i32, i64> = HashMap::new();
+    let mut paths = Vec::new();
 
-            let source_path = persistence_directory.join(source_id.to_string());
+    let source_path = persistence_directory.join(source_id.to_string());
 
-            // Not safe to assume that the directory we are trying to read will be there
-            // so if its not lets just early exit.
-            let entries = match std::fs::read_dir(&source_path) {
-                Ok(entries) => entries,
-                Err(e) => {
-                    error!(
-                        "Failed to read from persistence data from {}: {}",
-                        source_path.display(),
-                        e
-                    );
-                    return Ok(());
-                }
-            };
+    // Not safe to assume that the directory we are trying to read will be there
+    // so if its not lets just early exit.
+    let entries = match std::fs::read_dir(&source_path) {
+        Ok(entries) => entries,
+        Err(e) => {
+            error!(
+                "Failed to read from persistence data from {}: {}",
+                source_path.display(),
+                e
+            );
+            return Ok(None);
+        }
+    };
 
-            for entry in entries {
-                if let Ok(file) = entry {
-                    let path = file.path();
-                    if let Some(metadata) = RecordFileMetadata::from_path(&path)? {
-                        if metadata.source_id != source_id {
-                            error!("Ignoring persistence file with invalid source id. Received: {} expected: {} path: {}",
+    for entry in entries {
+        if let Ok(file) = entry {
+            let path = file.path();
+            if let Some(metadata) = RecordFileMetadata::from_path(&path)? {
+                if metadata.source_id != source_id {
+                    error!("Ignoring persistence file with invalid source id. Received: {} expected: {} path: {}",
                                    metadata.source_id,
                                    source_id,
                                    path.display());
-                            continue;
-                        }
+                    continue;
+                }
 
-                        if metadata.cluster_id != cluster_id {
-                            error!("Ignoring persistence file with invalid cluster id. Received: {} expected: {} path: {}",
+                if metadata.cluster_id != cluster_id {
+                    error!("Ignoring persistence file with invalid cluster id. Received: {} expected: {} path: {}",
                             metadata.cluster_id,
                             cluster_id,
                             path.display());
-                            continue;
-                        }
-
-                        paths.push(path);
-
-                        // TODO: we need to be more careful here to handle the case where we are for
-                        // some reason missing some values here.
-                        match read_offsets.get(&metadata.partition_id) {
-                            None => {
-                                read_offsets.insert(metadata.partition_id, metadata.end_offset);
-                            }
-                            Some(o) => {
-                                if metadata.end_offset > *o {
-                                    read_offsets.insert(metadata.partition_id, metadata.end_offset);
-                                }
-                            }
-                        };
-                    }
+                    continue;
                 }
+
+                paths.push(path);
+
+                // TODO: we need to be more careful here to handle the case where we are for
+                // some reason missing some values here.
+                match read_offsets.get(&metadata.partition_id) {
+                    None => {
+                        read_offsets.insert(metadata.partition_id, metadata.end_offset);
+                    }
+                    Some(o) => {
+                        if metadata.end_offset > *o {
+                            read_offsets.insert(metadata.partition_id, metadata.end_offset);
+                        }
+                    }
+                };
             }
-
-            k.start_offsets = read_offsets;
-            k.persisted_files = Some(paths);
         }
-        _ => bail!("persistence only enabled for Kafka sources at this time"),
     }
-
-    Ok(())
+    Ok(Some((paths, read_offsets)))
 }
 
 // Given the input records, extract a prefix of records that are "dense," meaning they contain all

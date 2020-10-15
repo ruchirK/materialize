@@ -34,7 +34,7 @@ use timely::progress::{Antichain, ChangeBatch, Timestamp as _};
 use tokio::runtime::Handle;
 
 use dataflow::source::persistence::PersistenceSender;
-use dataflow::{PersistenceMessage, SequencedCommand, WorkerFeedback, WorkerFeedbackWithMeta};
+use dataflow::{PersistenceAddSource, PersistenceMessage, SequencedCommand, WorkerFeedback, WorkerFeedbackWithMeta};
 use dataflow_types::logging::LoggingConfig;
 use dataflow_types::{
     AvroOcfSinkConnector, DataflowDesc, IndexDesc, KafkaSinkConnector, PeekResponse, SinkConnector,
@@ -229,7 +229,16 @@ where
                 //using a single dataflow, we have to make sure the rebuild process re-runs
                 //the same multiple-build dataflow.
                 CatalogItem::Source(source) => {
-                    self.maybe_begin_persistence(*id, &source.connector).await;
+                    let start_offsets = self.persistence_path.map(|path|
+                        crate::persistence::get_persistence_info(path, self.cluster_id(),
+                        *id)?).flatten();
+
+                    let add_source = PersistenceAddSource {
+                        source_id: *id,
+                        cluster_id: self.cluster_id(),
+                        start_offsets,
+                    };
+                    self.maybe_begin_persistence(add_source, &source.connector).await;
                 }
                 CatalogItem::Index(_) => {
                     if BUILTINS.logs().any(|log| log.index_id == *id) {
@@ -1618,7 +1627,12 @@ where
                         .await;
                 }
 
-                self.maybe_begin_persistence(source_id, &source.connector)
+                let add_source = PersistenceAddSource {
+                    source_id,
+                    cluster_id: self.cluster_id(),
+                    start_offsets: None,
+                };
+                self.maybe_begin_persistence(add_source, &source.connector)
                     .await;
                 Ok(ExecuteResponse::CreatedSource { existed: false })
             }
@@ -2918,12 +2932,12 @@ where
     // has persistence enabled and Materialize has persistence enabled.
     // This function is a no-op if the persister has already started persisting
     // this source.
-    async fn maybe_begin_persistence(&mut self, id: GlobalId, source_connector: &SourceConnector) {
+    async fn maybe_begin_persistence(&mut self, source: PersistenceAddSource, source_connector: &SourceConnector) {
         if let SourceConnector::External { connector, .. } = source_connector {
             if connector.persistence_enabled() {
                 if let Some(persistence_tx) = &mut self.persistence_tx {
                     persistence_tx
-                        .send(PersistenceMessage::AddSource(self.catalog.cluster_id(), id))
+                        .send(PersistenceMessage::AddSource(source)
                         .await
                         .expect("failed to send CREATE SOURCE notification to persistence thread");
                 } else {

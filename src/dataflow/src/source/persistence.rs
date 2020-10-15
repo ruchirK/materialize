@@ -12,6 +12,7 @@
 // TODO: currently everything is fairly Kafka-centric and we should probably
 // not directly usable for some other source types.
 
+use std::collections::HashMap;
 use std::path::Path;
 use std::pin::Pin;
 
@@ -44,6 +45,8 @@ pub struct RecordFileMetadata {
     pub start_offset: i64,
     /// The exclusive upper bound of offsets provided by this file.
     pub end_offset: i64,
+    /// Whether or not this file is the first file for this partition.
+    pub first: bool,
 }
 
 impl RecordFileMetadata {
@@ -77,7 +80,7 @@ impl RecordFileMetadata {
 
         let parts: Vec<_> = file_name.split('-').collect();
 
-        if parts.len() != 6 {
+        if parts.len() != 6 && parts.len() != 7 {
             // File is either partially written, or entirely irrelevant.
             error!(
                 "Found invalid persistence file name: {}. Ignoring",
@@ -85,6 +88,16 @@ impl RecordFileMetadata {
             );
             return Ok(None);
         }
+
+        if parts.len() == 7 && parts[6] != "first" {
+            // We got a invalid filename.
+            error!(
+                "Found invalid persistence file name: {}. Ignoring",
+                file_name
+            );
+            return Ok(None);
+        }
+
         Ok(Some(Self {
             cluster_id: Uuid::parse_str(parts[1])?,
             source_id: parts[2].parse()?,
@@ -93,6 +106,7 @@ impl RecordFileMetadata {
             // offset in `generate_file_name`.
             start_offset: parts[4].parse::<i64>()? + 1,
             end_offset: parts[5].parse()?,
+            first: parts.len() == 7,
         }))
     }
 
@@ -103,6 +117,7 @@ impl RecordFileMetadata {
         partition_id: i32,
         start_offset: i64,
         end_offset: i64,
+        first: bool,
     ) -> String {
         // We get start and end offsets as 1-indexed MzOffsets that denote the set of
         // offsets [start, end] (in 1-indexed offsets). Unfortunately, Kafka offsets are
@@ -114,7 +129,7 @@ impl RecordFileMetadata {
             start_offset > 0,
             "start offset has to be a valid 1-indexed offset"
         );
-        format!(
+        let file_name = format!(
             "{}-{}-{}-{}-{}-{}",
             RECORD_FILE_PREFIX,
             cluster_id.to_simple(),
@@ -122,7 +137,13 @@ impl RecordFileMetadata {
             partition_id,
             start_offset - 1,
             end_offset
-        )
+        );
+
+        if first {
+            format!("{}-first", file_name)
+        } else {
+            file_name
+        }
     }
 }
 
@@ -135,4 +156,16 @@ pub struct WorkerPersistenceData {
     pub partition_id: i32,
     /// The record itself.
     pub record: PersistedRecord,
+}
+
+/// TODO blahblah
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct PersistenceAddSource {
+    /// Global Id of source
+    pub source_id: GlobalId,
+    /// Cluster id
+    pub cluster_id: Uuid,
+    /// Optional set of offsets that indicate records that have already been
+    /// persisted.
+    pub start_offsets: Option<HashMap<i32, i64>>,
 }
