@@ -1,0 +1,94 @@
+# Copyright Materialize, Inc. All rights reserved.
+#
+# Use of this software is governed by the Business Source License
+# included in the LICENSE file at the root of this repository.
+#
+# As of the Change Date specified in that file, in accordance with
+# the Business Source License, use of this software will be governed
+# by the Apache License, Version 2.0.
+
+version: '3.7'
+
+mzworkflows:
+  persistent-tables:
+    steps:
+      - step: start-services
+        services: [materialized-nonpersistent]
+
+      - step: wait-for-mz
+        service: materialized-nonpersistent
+
+      - step: run
+        service: testdrive-svc
+        command: --materialized-url=postgres://materialize@materialized-nonpersistent:6875 before-persistence.td
+
+      - step: kill-services
+        services: [materialized-nonpersistent]
+
+      - step: start-services
+        services: [materialized-persistent]
+
+      - step: wait-for-mz
+        service: materialized-persistent
+
+      - step: run
+        service: testdrive-svc
+        command: --materialized-url=postgres://materialize@materialized-persistent:6875 before-restart.td
+
+      - step: kill-services
+        services: [materialized-persistent]
+
+      - step: start-services
+        services: [materialized-persistent]
+
+      - step: wait-for-mz
+        service: materialized-persistent
+
+      - step: run
+        service: testdrive-svc
+        command: --no-reset --materialized-url=postgres://materialize@materialized-persistent:6875 after-restart.td
+
+services:
+  testdrive-svc:
+    mzbuild: testdrive
+    entrypoint:
+      - bash
+      - -c
+      - >-
+        testdrive
+        $$*
+      - bash
+    volumes:
+    - .:/workdir
+    - persistent-tables-mzdata:/share/mzdata
+    propagate-uid-gid: true
+    init: true
+
+  materialized-nonpersistent:
+    mzbuild: materialized
+    entrypoint:
+      - bash
+      - -c
+      - >-
+        materialized --data-directory=/share/mzdata --experimental --disable-telemetry $$*
+      - bash
+    ports:
+      - 6875
+    volumes:
+    - persistent-tables-mzdata:/share/mzdata
+
+  materialized-persistent:
+    mzbuild: materialized
+    entrypoint:
+      - bash
+      - -c
+      - >-
+        materialized --data-directory=/share/mzdata --experimental --disable-telemetry --persistent-tables $$*
+      - bash
+    ports:
+      - 6875
+    volumes:
+    - persistent-tables-mzdata:/share/mzdata
+
+volumes:
+  persistent-tables-mzdata:
