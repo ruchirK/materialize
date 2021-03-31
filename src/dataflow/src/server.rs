@@ -225,6 +225,76 @@ pub fn serve(config: Config) -> Result<WorkerGuards<()>, String> {
     )
 }
 
+pub struct PartitionTimestampBindings {
+    bindings: Vec<(Timestamp, MzOffset)>,
+    proposed: Option<(Timestamp, MzOffset)>,
+}
+
+impl PartitionTimestampBindings {
+    fn new() -> Self {
+        Self {
+            bindings: Vec::new(),
+            proposed: None,
+        }
+    }
+
+    fn add(&mut self, timestamp: Timestamp, offset: MzOffset) {
+        let (last_ts, last_offset) = self.bindings.last().unwrap_or(&(0, MzOffset { offset: 0 }));
+        assert!(
+            offset >= *last_offset,
+            "offset should not go backwards, but {} < {}",
+            offset,
+            last_offset
+        );
+        assert!(
+            timestamp > *last_ts,
+            "timestamp should move forwards, but {} <= {}",
+            timestamp,
+            last_ts
+        );
+
+        assert!(self.proposed.is_none());
+        self.bindings.push((timestamp, offset));
+    }
+
+    fn get(&self, offset: MzOffset) -> Option<(Timestamp, Option<MzOffset>)> {
+        for (ts, max_offset) in self.bindings.iter() {
+            if offset <= *max_offset {
+                return Some((*ts, Some(*max_offset)));
+            }
+        }
+
+        if let Some((proposed_ts, _)) = self.proposed {
+            return Some((proposed_ts, None));
+        }
+
+        return None;
+    }
+
+    fn upper(&self) -> Option<Timestamp> {
+        self.bindings.last().map(|(time, _)| *time)
+    }
+
+    fn try_update_proposed_upper(&mut self, new_offset: MzOffset) {
+        if let Some((_, proposed_offset)) = self.proposed.as_mut() {
+            if new_offset > *proposed_offset {
+                *proposed_offset = new_offset;
+            }
+        }
+    }
+
+    fn update_proposed_time(&mut self, new_time: Timestamp) {
+        if let Some((time, max_offset)) = self.proposed {
+            self.bindings.push((time, max_offset));
+        }
+
+        `
+
+    fn compact(&mut self, frontier: AntichainRef<Timestamp>) {
+        self.bindings.retain(|(time, _)| frontier.less_equal(time));
+    }
+}
+
 /// This struct holds per-source timestamp state in a way that can be shared across
 /// different source instances and allow different source instances to indicate
 /// how far they have read up to.
@@ -236,19 +306,27 @@ pub struct TimestampBindingBox {
     /// by timestamp and offset and each `(time, offset)` entry indicates that offsets <=
     /// `offset` should be assigned `time` as their timestamp. Consecutive entries form
     /// an interval of offsets.
-    partitions: HashMap<PartitionId, Vec<(Timestamp, MzOffset)>>,
+    partitions: HashMap<PartitionId, PartitionTimestampBindings>,
     /// Indicates the lowest timestamp across all partitions that we retain bindings for.
     /// This frontier can be held back by other entities holding the shared
     /// `TimestampBindingRc`.
     compaction_frontier: MutableAntichain<Timestamp>,
+    /// Indicates whether the timestamps should come from periodically incrementing a
+    /// monotonically increasing clock, or from some external source.
+    is_real_time: bool,
+    /// Last update time (only modified for real time sources for now)
+    /// FIXME: make this less enum-like
+    last_update_time: Instant,
 }
 
 impl TimestampBindingBox {
     /// Create a new instance of `TimestampBindingBox`.
-    fn new() -> Self {
+    fn new(is_real_time: bool) -> Self {
         Self {
             partitions: HashMap::new(),
             compaction_frontier: MutableAntichain::new(),
+            is_real_time,
+            last_update_time: Instant::now(),
         }
     }
 
@@ -271,8 +349,8 @@ impl TimestampBindingBox {
         if !frontier.is_empty() {
             // Other folks are using these timestamp bindings. Lets keep everything
             // >= what people are using
-            for (_, entries) in self.partitions.iter_mut() {
-                entries.retain(|(time, _)| frontier.less_equal(time));
+            for (_, bindings) in self.partitions.iter_mut() {
+                bindings.compact(frontier);
             }
         }
     }
@@ -282,21 +360,11 @@ impl TimestampBindingBox {
     /// Note that the `offset` and `timestamp` both have to be greater than the
     /// largest previously bound offsets or timestamps for that partition.
     fn add_binding(&mut self, partition: PartitionId, timestamp: Timestamp, offset: MzOffset) {
-        let entry = self.partitions.entry(partition).or_insert_with(Vec::new);
-        let (last_ts, last_offset) = entry.last().unwrap_or(&(0, MzOffset { offset: 0 }));
-        assert!(
-            offset >= *last_offset,
-            "offset should not go backwards, but {} < {}",
-            offset,
-            last_offset
-        );
-        assert!(
-            timestamp > *last_ts,
-            "timestamp should move forwards, but {} <= {}",
-            timestamp,
-            last_ts
-        );
-        entry.push((timestamp, offset));
+        let bindings = self
+            .partitions
+            .entry(partition)
+            .or_insert_with(PartitionTimestampBindings::new);
+        bindings.add(timestamp, offset);
     }
 
     /// Get the timestamp assignment for `(partition, offset)` if it is known.
@@ -307,20 +375,13 @@ impl TimestampBindingBox {
         &self,
         partition: &PartitionId,
         offset: MzOffset,
-    ) -> Option<(Timestamp, MzOffset)> {
+    ) -> Option<(Timestamp, Option<MzOffset>)> {
         if !self.partitions.contains_key(partition) {
             return None;
         }
 
-        let entries = self.partitions.get(partition).expect("known to exist");
-
-        for (ts, max_offset) in entries {
-            if offset <= *max_offset {
-                return Some((*ts, *max_offset));
-            }
-        }
-
-        return None;
+        let bindings = self.partitions.get(partition).expect("known to exist");
+        bindings.get(offset)
     }
 
     /// Returns the maximum timestamp that is bound on all
@@ -330,9 +391,9 @@ impl TimestampBindingBox {
     fn get_upper(&self) -> Antichain<Timestamp> {
         let mut upper = Antichain::new();
 
-        for (_, entries) in self.partitions.iter() {
-            if let Some((timestamp, _)) = entries.last() {
-                upper.insert(*timestamp);
+        for (_, bindings) in self.partitions.iter() {
+            if let Some(timestamp) = bindings.upper() {
+                upper.insert(timestamp);
             }
         }
 
@@ -361,8 +422,8 @@ pub struct TimestampBindingRc {
 }
 
 impl TimestampBindingRc {
-    pub fn new() -> Self {
-        let wrapper = Rc::new(RefCell::new(TimestampBindingBox::new()));
+    pub fn new(is_real_time: bool) -> Self {
+        let wrapper = Rc::new(RefCell::new(TimestampBindingBox::new(is_real_time)));
 
         let ret = Self {
             wrapper: wrapper.clone(),
@@ -393,7 +454,7 @@ impl TimestampBindingRc {
         &self,
         partition: &PartitionId,
         offset: MzOffset,
-    ) -> Option<(Timestamp, MzOffset)> {
+    ) -> Option<(Timestamp, Option<MzOffset>)> {
         self.wrapper.borrow().get_binding(partition, offset)
     }
 
@@ -889,7 +950,7 @@ where
                 self.shutdown_logging();
             }
             SequencedCommand::AddSourceTimestamping { id, connector } => {
-                let byo_default = TimestampDataUpdate::BringYourOwn(TimestampBindingRc::new());
+                let byo_default = TimestampDataUpdate::BringYourOwn(TimestampBindingRc::new(false));
 
                 let source_timestamp_data = if let SourceConnector::External {
                     connector,

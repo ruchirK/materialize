@@ -449,7 +449,7 @@ struct ConsInfo {
     current_ts: Timestamp,
     /// Current upper bound for the current timestamp. All offsets <= upper_bound
     /// are assigned to current_ts.
-    current_upper_bound: MzOffset,
+    current_upper_bound: Option<MzOffset>,
     /// the last processed offset
     offset: MzOffset,
 }
@@ -458,14 +458,14 @@ impl ConsInfo {
     fn new(timestamp: Timestamp) -> Self {
         Self {
             current_ts: timestamp,
-            current_upper_bound: MzOffset { offset: 0 },
+            current_upper_bound: None,
             offset: MzOffset { offset: 0 },
         }
     }
 
-    fn update_timestamp(&mut self, timestamp: Timestamp, upper: MzOffset) {
+    fn update_timestamp(&mut self, timestamp: Timestamp, upper: Option<MzOffset>) {
         assert!(timestamp >= self.current_ts);
-        assert!(upper >= self.current_upper_bound);
+        //assert!(upper >= self.current_upper_bound);
 
         self.current_upper_bound = upper;
         self.current_ts = timestamp;
@@ -473,16 +473,39 @@ impl ConsInfo {
 
     fn update_offset(&mut self, offset: MzOffset) {
         assert!(offset >= self.offset);
-        assert!(offset <= self.current_upper_bound);
+
+        if let Some(upper) = self.current_upper_bound {
+            assert!(offset <= upper);
+        }
         self.offset = offset;
     }
 
     fn get_closed_timestamp(&self) -> Timestamp {
-        if self.current_ts == 0 || self.current_upper_bound == self.offset {
+        if self.current_ts == 0 {
             return self.current_ts;
         }
 
+        if let Some(upper) = self.current_upper_bound {
+            if upper == self.offset {
+                return self.current_ts;
+            }
+        }
+
         self.current_ts - 1
+    }
+
+    fn get_matching_timestamp(&self, offset: MzOffset) -> Option<Timestamp> {
+        if self.current_ts == 0 {
+            return None;
+        }
+
+        if let Some(upper) = self.current_upper_bound {
+            if offset > upper {
+                return None;
+            }
+        }
+
+        Some(self.current_ts)
     }
 }
 
@@ -761,11 +784,12 @@ impl ConsistencyInfo {
                 .get_mut(partition)
                 .expect("known to exist");
 
-            if cons_info.current_upper_bound >= offset {
+            let ts = cons_info.get_matching_timestamp(offset);
+            if ts.is_some() {
                 // This is the fast path - we can reuse a timestamp binding
                 // we already know about.
                 cons_info.update_offset(offset);
-                Some(cons_info.current_ts)
+                ts
             } else {
                 if let Some((timestamp, max_offset)) =
                     timestamp_bindings.get_binding(partition, offset)
@@ -1311,7 +1335,7 @@ where
         {
             history.clone()
         } else {
-            TimestampBindingRc::new()
+            TimestampBindingRc::new(true)
         };
 
         let mut predecessor = None;
