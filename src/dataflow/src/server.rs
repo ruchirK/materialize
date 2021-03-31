@@ -10,7 +10,6 @@
 //! An interactive dataflow server.
 
 use std::cell::RefCell;
-use std::collections::VecDeque;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::Mutex;
@@ -27,7 +26,7 @@ use timely::dataflow::operators::unordered_input::UnorderedHandle;
 use timely::dataflow::operators::ActivateCapability;
 use timely::logging::Logger;
 use timely::order::PartialOrder;
-use timely::progress::frontier::Antichain;
+use timely::progress::frontier::{Antichain, AntichainRef, MutableAntichain};
 use timely::progress::ChangeBatch;
 use timely::worker::Worker as TimelyWorker;
 use tokio::sync::mpsc;
@@ -218,6 +217,7 @@ pub fn serve(config: Config) -> Result<WorkerGuards<()>, String> {
                 pending_peeks: Vec::new(),
                 feedback_tx: None,
                 reported_frontiers: HashMap::new(),
+                reported_source_frontiers: HashMap::new(),
                 metrics: Metrics::for_worker_id(worker_idx),
             }
             .run()
@@ -225,12 +225,208 @@ pub fn serve(config: Config) -> Result<WorkerGuards<()>, String> {
     )
 }
 
+/// This struct holds per-source timestamp state in a way that can be shared across
+/// different source instances and allow different source instances to indicate
+/// how far they have read up to.
+///
+/// This type is almost never meant to be used directly, and you probably want to
+/// use `TimestampBindingRc` instead.
+pub struct TimestampBindingBox {
+    /// List of timestamp bindings per independent partition. This vector is sorted
+    /// by timestamp and offset and each `(time, offset)` entry indicates that offsets <=
+    /// `offset` should be assigned `time` as their timestamp. Consecutive entries form
+    /// an interval of offsets.
+    partitions: HashMap<PartitionId, Vec<(Timestamp, MzOffset)>>,
+    /// Indicates the lowest timestamp across all partitions that we retain bindings for.
+    /// This frontier can be held back by other entities holding the shared
+    /// `TimestampBindingRc`.
+    compaction_frontier: MutableAntichain<Timestamp>,
+}
+
+impl TimestampBindingBox {
+    /// Create a new instance of `TimestampBindingBox`.
+    fn new() -> Self {
+        Self {
+            partitions: HashMap::new(),
+            compaction_frontier: MutableAntichain::new(),
+        }
+    }
+
+    fn adjust_compaction_frontier(
+        &mut self,
+        remove: AntichainRef<Timestamp>,
+        add: AntichainRef<Timestamp>,
+    ) {
+        self.compaction_frontier
+            .update_iter(remove.iter().map(|t| (*t, -1)));
+        self.compaction_frontier
+            .update_iter(add.iter().map(|t| (*t, 1)));
+    }
+
+    /// Drop all of the timestamp bindings for timestamps not in advance of the
+    /// compaction frontier.
+    fn compact(&mut self) {
+        let frontier = self.compaction_frontier.frontier();
+
+        if !frontier.is_empty() {
+            // Other folks are using these timestamp bindings. Lets keep everything
+            // >= what people are using
+            for (_, entries) in self.partitions.iter_mut() {
+                entries.retain(|(time, _)| frontier.less_equal(time));
+            }
+        }
+    }
+
+    /// Add a new mapping from `(partition, offset) -> timestamp`.
+    ///
+    /// Note that the `offset` and `timestamp` both have to be greater than the
+    /// largest previously bound offsets or timestamps for that partition.
+    fn add_binding(&mut self, partition: PartitionId, timestamp: Timestamp, offset: MzOffset) {
+        let entry = self.partitions.entry(partition).or_insert_with(Vec::new);
+        let (last_ts, last_offset) = entry.last().unwrap_or(&(0, MzOffset { offset: 0 }));
+        assert!(
+            offset >= *last_offset,
+            "offset should not go backwards, but {} < {}",
+            offset,
+            last_offset
+        );
+        assert!(
+            timestamp > *last_ts,
+            "timestamp should move forwards, but {} <= {}",
+            timestamp,
+            last_ts
+        );
+        entry.push((timestamp, offset));
+    }
+
+    /// Get the timestamp assignment for `(partition, offset)` if it is known.
+    ///
+    /// This function returns the timestamp and the maximum offset for which it is
+    /// valid.
+    fn get_binding(
+        &self,
+        partition: &PartitionId,
+        offset: MzOffset,
+    ) -> Option<(Timestamp, MzOffset)> {
+        if !self.partitions.contains_key(partition) {
+            return None;
+        }
+
+        let entries = self.partitions.get(partition).expect("known to exist");
+
+        for (ts, max_offset) in entries {
+            if offset <= *max_offset {
+                return Some((*ts, *max_offset));
+            }
+        }
+
+        return None;
+    }
+
+    /// Returns the maximum timestamp that is bound on all
+    /// of the partitions (e.g. the smallest timestamp that every
+    /// single partition knows about). We can guarantee that all
+    /// subsequent updates will be in advance of this timestamp.
+    fn get_upper(&self) -> Antichain<Timestamp> {
+        let mut upper = Antichain::new();
+
+        for (_, entries) in self.partitions.iter() {
+            if let Some((timestamp, _)) = entries.last() {
+                upper.insert(*timestamp);
+            }
+        }
+
+        upper
+    }
+
+    /// Returns the list of partitions this source knows about.
+    ///
+    /// TODO(rkhaitan): this function feels like a hack, both in the API of having
+    /// the source instances ask for the list of known partitions and in allocating
+    /// a vector to answer that question.
+    fn partitions(&self) -> Vec<PartitionId> {
+        self.partitions
+            .iter()
+            .map(|(pid, _)| pid)
+            .cloned()
+            .collect()
+    }
+}
+
+/// A wrapper that allows multiple source instances to share a `TimestampBindingBox`
+/// and hold back its compaction.
+pub struct TimestampBindingRc {
+    wrapper: Rc<RefCell<TimestampBindingBox>>,
+    compaction_frontier: Antichain<Timestamp>,
+}
+
+impl TimestampBindingRc {
+    pub fn new() -> Self {
+        let wrapper = Rc::new(RefCell::new(TimestampBindingBox::new()));
+
+        let ret = Self {
+            wrapper: wrapper.clone(),
+            compaction_frontier: wrapper.borrow().compaction_frontier.frontier().to_owned(),
+        };
+
+        ret
+    }
+
+    pub fn set_compaction_frontier(&mut self, new_frontier: AntichainRef<Timestamp>) {
+        self.wrapper
+            .borrow_mut()
+            .adjust_compaction_frontier(self.compaction_frontier.borrow(), new_frontier);
+        self.compaction_frontier = new_frontier.to_owned();
+    }
+
+    fn compact(&self) {
+        self.wrapper.borrow_mut().compact();
+    }
+
+    fn add_binding(&self, partition: PartitionId, timestamp: Timestamp, offset: MzOffset) {
+        self.wrapper
+            .borrow_mut()
+            .add_binding(partition, timestamp, offset);
+    }
+
+    pub fn get_binding(
+        &self,
+        partition: &PartitionId,
+        offset: MzOffset,
+    ) -> Option<(Timestamp, MzOffset)> {
+        self.wrapper.borrow().get_binding(partition, offset)
+    }
+
+    pub fn get_upper(&self) -> Antichain<Timestamp> {
+        self.wrapper.borrow().get_upper()
+    }
+
+    pub fn partitions(&self) -> Vec<PartitionId> {
+        self.wrapper.borrow().partitions()
+    }
+}
+
+impl Clone for TimestampBindingRc {
+    fn clone(&self) -> Self {
+        // Bump the reference count for the current frontier
+        self.wrapper.borrow_mut().adjust_compaction_frontier(
+            Antichain::new().borrow(),
+            self.compaction_frontier.borrow(),
+        );
+
+        Self {
+            wrapper: self.wrapper.clone(),
+            compaction_frontier: self.compaction_frontier.clone(),
+        }
+    }
+}
+
 /// A type wrapper for a timestamp update
 pub enum TimestampDataUpdate {
     /// RT sources see the current set of partitions known to the source.
     RealTime(HashSet<PartitionId>),
     /// BYO sources see a list of (Timestamp, MzOffset) timestamp updates
-    BringYourOwn(HashMap<PartitionId, VecDeque<(Timestamp, MzOffset)>>),
+    BringYourOwn(TimestampBindingRc),
 }
 /// Map of source ID to timestamp data updates (RT or BYO).
 pub type TimestampDataUpdates = Rc<RefCell<HashMap<GlobalId, TimestampDataUpdate>>>;
@@ -257,6 +453,8 @@ where
     feedback_tx: Option<mpsc::UnboundedSender<WorkerFeedbackWithMeta>>,
     /// Tracks the frontier information that has been sent over `feedback_tx`.
     reported_frontiers: HashMap<GlobalId, Antichain<Timestamp>>,
+    /// Tracks source timestamp frontier information that has been sent over `feedback_tx`.
+    reported_source_frontiers: HashMap<GlobalId, Antichain<Timestamp>>,
     /// Metrics bundle.
     metrics: Metrics,
 }
@@ -416,6 +614,8 @@ where
         while !shutdown {
             // Enable trace compaction.
             self.render_state.traces.maintenance();
+            // Compact timestamp bindings
+            self.compact_timestamp_bindings();
 
             // Ask Timely to execute a unit of work. If Timely decides there's
             // nothing to do, it will park the thread. We rely on another thread
@@ -468,6 +668,33 @@ where
                         progress.push((*id, changes));
                     }
                     lower.clone_from(&upper);
+                }
+            }
+
+            for (id, source_ts_history) in self.render_state.ts_histories.borrow().iter() {
+                match source_ts_history {
+                    TimestampDataUpdate::RealTime(_) => continue,
+                    TimestampDataUpdate::BringYourOwn(history) => {
+                        let upper = history.get_upper();
+                        let lower = self
+                            .reported_source_frontiers
+                            .get_mut(&id)
+                            .expect("Frontier missing!");
+                        if lower != &upper {
+                            let mut changes = ChangeBatch::new();
+                            for time in lower.elements().iter() {
+                                changes.update(time.clone(), -1);
+                            }
+                            for time in upper.elements().iter() {
+                                changes.update(time.clone(), 1);
+                            }
+                            changes.compact();
+                            if !changes.is_empty() {
+                                progress.push((*id, changes));
+                            }
+                            lower.clone_from(&upper);
+                        }
+                    }
                 }
             }
             if let Some(logger) = self.materialized_logger.as_mut() {
@@ -634,6 +861,16 @@ where
                     self.render_state
                         .traces
                         .allow_compaction(id, frontier.borrow());
+                    if let Some(ts_history) =
+                        self.render_state.ts_histories.borrow_mut().get_mut(&id)
+                    {
+                        match ts_history {
+                            TimestampDataUpdate::BringYourOwn(history) => {
+                                history.set_compaction_frontier(frontier.borrow());
+                            }
+                            _ => (),
+                        }
+                    }
                 }
             }
 
@@ -652,7 +889,7 @@ where
                 self.shutdown_logging();
             }
             SequencedCommand::AddSourceTimestamping { id, connector } => {
-                let byo_default = TimestampDataUpdate::BringYourOwn(HashMap::new());
+                let byo_default = TimestampDataUpdate::BringYourOwn(TimestampBindingRc::new());
 
                 let source_timestamp_data = if let SourceConnector::External {
                     connector,
@@ -727,34 +964,19 @@ where
                 if let Some(data) = source_timestamp_data {
                     let prev = self.render_state.ts_histories.borrow_mut().insert(id, data);
                     assert!(prev.is_none());
+                    self.reported_source_frontiers
+                        .insert(id, Antichain::from_elem(0));
                 }
             }
             SequencedCommand::AdvanceSourceTimestamp { id, update } => {
                 let mut timestamps = self.render_state.ts_histories.borrow_mut();
                 if let Some(ts_entries) = timestamps.get_mut(&id) {
                     match ts_entries {
-                        TimestampDataUpdate::BringYourOwn(entries) => {
+                        TimestampDataUpdate::BringYourOwn(history) => {
                             if let TimestampSourceUpdate::BringYourOwn(pid, timestamp, offset) =
                                 update
                             {
-                                let partition_entries =
-                                    entries.entry(pid).or_insert_with(VecDeque::new);
-                                let (last_ts, last_offset) = partition_entries
-                                    .back()
-                                    .unwrap_or(&(0, MzOffset { offset: 0 }));
-                                assert!(
-                                    offset >= *last_offset,
-                                    "offset should not go backwards, but {} < {}",
-                                    offset,
-                                    last_offset
-                                );
-                                assert!(
-                                    timestamp > *last_ts,
-                                    "timestamp should move forwards, but {} <= {}",
-                                    timestamp,
-                                    last_ts
-                                );
-                                partition_entries.push_back((timestamp, offset));
+                                history.add_binding(pid, timestamp, offset);
                             } else {
                                 panic!("Unexpected message type. Expected BYO update.")
                             }
@@ -794,6 +1016,8 @@ where
                 if prev.is_none() {
                     log::debug!("Attempted to drop timestamping for source {} not previously mapped to any instances", id);
                 }
+
+                self.reported_source_frontiers.remove(&id);
             }
         }
     }
@@ -815,6 +1039,15 @@ where
                 if let Some(logger) = self.materialized_logger.as_mut() {
                     logger.log(MaterializedEvent::Peek(peek.as_log_event(), false));
                 }
+            }
+        }
+    }
+
+    /// Attempt to compact source timestamp bindings
+    fn compact_timestamp_bindings(&self) {
+        for (_, ts_history) in self.render_state.ts_histories.borrow().iter() {
+            if let TimestampDataUpdate::BringYourOwn(history) = ts_history {
+                history.compact();
             }
         }
     }
