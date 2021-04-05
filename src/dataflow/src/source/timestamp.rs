@@ -167,6 +167,9 @@ impl TimestampBindingRc {
     }
 
     /// Set the compaction frontier to `new_frontier`.
+    ///
+    /// Note that `new_frontier` must be in advance of the current compaction
+    /// frontier.
     pub fn set_compaction_frontier(&mut self, new_frontier: AntichainRef<Timestamp>) {
         self.wrapper
             .borrow_mut()
@@ -197,6 +200,8 @@ impl TimestampBindingRc {
     ///
     /// This function returns the timestamp and the maximum offset for which it is
     /// valid.
+    /// TODO: this function does a linear scan through the set of timestamp bindings
+    /// but it should do a binary search.
     pub fn get_binding(
         &self,
         partition: &PartitionId,
@@ -205,10 +210,9 @@ impl TimestampBindingRc {
         self.wrapper.borrow().get_binding(partition, offset)
     }
 
-    /// Returns the maximum timestamp that is bound on all
-    /// of the partitions (e.g. the smallest timestamp that every
-    /// single partition knows about). We can guarantee that all
-    /// subsequent updates will be in advance of this timestamp.
+    /// Returns the lower bound across every partition's most recent timestamp.
+    ///
+    /// All subsequent updates will either be at or in advance of this frontier.
     pub fn get_upper(&self) -> Antichain<Timestamp> {
         self.wrapper.borrow().get_upper()
     }
