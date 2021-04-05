@@ -49,8 +49,8 @@ use tokio::sync::{mpsc, RwLock, RwLockReadGuard};
 use super::source::util::source;
 use crate::logging::materialized::{Logger, MaterializedEvent};
 use crate::operator::StreamExt;
-use crate::server::{TimestampBindingRc, TimestampDataUpdate, TimestampDataUpdates};
 use crate::source::cache::WorkerCacheData;
+use crate::source::timestamp::{TimestampBindingRc, TimestampDataUpdate, TimestampDataUpdates};
 use crate::CacheMessage;
 
 mod file;
@@ -61,6 +61,7 @@ mod s3;
 mod util;
 
 pub mod cache;
+pub mod timestamp;
 
 use differential_dataflow::Hashable;
 pub use file::read_file_task;
