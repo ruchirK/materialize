@@ -59,12 +59,31 @@ impl TimestampBindingBox {
     fn compact(&mut self) {
         let frontier = self.compaction_frontier.frontier();
 
-        if !frontier.is_empty() {
-            // Other folks are using these timestamp bindings. Lets keep everything
-            // >= what people are using
-            for (_, entries) in self.partitions.iter_mut() {
-                entries.retain(|(time, _)| frontier.less_equal(time));
+        // Don't compact up to the empty frontier as it would mean there were no
+        // timestamp bindings available
+        // TODO(rkhaitan): is there a more sensible approach here?
+        if frontier.is_empty() {
+            return;
+        }
+
+        for (_, entries) in self.partitions.iter_mut() {
+            // First, let's advance all times not in advance of the frontier to the frontier
+            // to the frontier
+            for (time, _) in entries.iter_mut() {
+                if !frontier.less_equal(time) {
+                    *time = *frontier.first().expect("known to exist");
+                }
             }
+
+            let mut new_entries = Vec::with_capacity(entries.len());
+            // Now let's only keep the largest binding for each offset
+            for i in 0..(entries.len() - 1) {
+                if entries[i].0 != entries[i + 1].0 {
+                    new_entries.push(entries[i]);
+                }
+            }
+
+            *entries = new_entries;
         }
     }
 
@@ -155,8 +174,11 @@ impl TimestampBindingRc {
         self.compaction_frontier = new_frontier.to_owned();
     }
 
-    /// Drop all of the timestamp bindings for timestamps not in advance of the
+    /// Compact all timestamp bindings at timestamps less than the current
     /// compaction frontier.
+    ///
+    /// The source can be correctly replayed from any `as_of` in advance of
+    /// the compaction frontier after this operation.
     pub fn compact(&self) {
         self.wrapper.borrow_mut().compact();
     }
