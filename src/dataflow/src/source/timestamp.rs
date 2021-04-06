@@ -67,6 +67,10 @@ impl TimestampBindingBox {
         }
 
         for (_, entries) in self.partitions.iter_mut() {
+            if entries.is_empty() {
+                continue;
+            }
+
             // First, let's advance all times not in advance of the frontier to the frontier
             // to the frontier
             for (time, _) in entries.iter_mut() {
