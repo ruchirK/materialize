@@ -216,7 +216,6 @@ pub fn serve(config: Config) -> Result<WorkerGuards<()>, String> {
                 pending_peeks: Vec::new(),
                 feedback_tx: None,
                 reported_frontiers: HashMap::new(),
-                reported_source_frontiers: HashMap::new(),
                 metrics: Metrics::for_worker_id(worker_idx),
             }
             .run()
@@ -246,8 +245,6 @@ where
     feedback_tx: Option<mpsc::UnboundedSender<WorkerFeedbackWithMeta>>,
     /// Tracks the frontier information that has been sent over `feedback_tx`.
     reported_frontiers: HashMap<GlobalId, Antichain<Timestamp>>,
-    /// Tracks source timestamp frontier information that has been sent over `feedback_tx`.
-    reported_source_frontiers: HashMap<GlobalId, Antichain<Timestamp>>,
     /// Metrics bundle.
     metrics: Metrics,
 }
@@ -474,12 +471,15 @@ where
             }
 
             for (id, source_ts_history) in self.render_state.ts_histories.borrow().iter() {
+                // Only send upper frontier information for BYO sources at the moment.
+                // TODO(rkhaitan): get rid of this distinction.
                 match source_ts_history {
                     TimestampDataUpdate::RealTime(_) => continue,
                     TimestampDataUpdate::BringYourOwn(history) => {
+                        // Read the upper frontier and compare to what we've reported.
                         history.read_upper(&mut upper);
                         let lower = self
-                            .reported_source_frontiers
+                            .reported_frontiers
                             .get_mut(&id)
                             .expect("Frontier missing!");
                         if lower != &upper {
@@ -756,8 +756,7 @@ where
                 if let Some(data) = source_timestamp_data {
                     let prev = self.render_state.ts_histories.borrow_mut().insert(id, data);
                     assert!(prev.is_none());
-                    self.reported_source_frontiers
-                        .insert(id, Antichain::from_elem(0));
+                    self.reported_frontiers.insert(id, Antichain::from_elem(0));
                 }
             }
             SequencedCommand::AdvanceSourceTimestamp { id, update } => {
@@ -809,7 +808,7 @@ where
                     log::debug!("Attempted to drop timestamping for source {} not previously mapped to any instances", id);
                 }
 
-                self.reported_source_frontiers.remove(&id);
+                self.reported_frontiers.remove(&id);
             }
         }
     }
