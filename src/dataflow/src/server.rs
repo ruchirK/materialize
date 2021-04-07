@@ -9,7 +9,7 @@
 
 //! An interactive dataflow server.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{Instant, UNIX_EPOCH};
 
@@ -694,35 +694,35 @@ where
                             Some(byo_default)
                         }
                         (ExternalSourceConnector::Kafka(_), Consistency::RealTime) => {
-                            let mut partitions = HashSet::new();
-                            partitions.insert(PartitionId::Kafka(0));
-                            Some(TimestampDataUpdate::RealTime(partitions))
+                            let history = TimestampBindingRc::new();
+                            history.add_partition(PartitionId::Kafka(0));
+                            Some(TimestampDataUpdate::RealTime(history))
                         }
                         (ExternalSourceConnector::AvroOcf(_), Consistency::BringYourOwn(_)) => {
                             Some(byo_default)
                         }
                         (ExternalSourceConnector::AvroOcf(_), Consistency::RealTime) => {
-                            let mut partitions = HashSet::new();
-                            partitions.insert(PartitionId::File);
-                            Some(TimestampDataUpdate::RealTime(partitions))
+                            let history = TimestampBindingRc::new();
+                            history.add_partition(PartitionId::File);
+                            Some(TimestampDataUpdate::RealTime(history))
                         }
                         (ExternalSourceConnector::File(_), Consistency::BringYourOwn(_)) => {
                             Some(byo_default)
                         }
                         (ExternalSourceConnector::File(_), Consistency::RealTime) => {
-                            let mut partitions = HashSet::new();
-                            partitions.insert(PartitionId::File);
-                            Some(TimestampDataUpdate::RealTime(partitions))
+                            let history = TimestampBindingRc::new();
+                            history.add_partition(PartitionId::File);
+                            Some(TimestampDataUpdate::RealTime(history))
                         }
                         (ExternalSourceConnector::Kinesis(_), Consistency::RealTime) => {
-                            let mut partitions = HashSet::new();
-                            partitions.insert(PartitionId::Kinesis);
-                            Some(TimestampDataUpdate::RealTime(partitions))
+                            let history = TimestampBindingRc::new();
+                            history.add_partition(PartitionId::Kinesis);
+                            Some(TimestampDataUpdate::RealTime(history))
                         }
                         (ExternalSourceConnector::S3(_), Consistency::RealTime) => {
-                            let mut partitions = HashSet::new();
-                            partitions.insert(PartitionId::S3);
-                            Some(TimestampDataUpdate::RealTime(partitions))
+                            let history = TimestampBindingRc::new();
+                            history.add_partition(PartitionId::S3);
+                            Some(TimestampDataUpdate::RealTime(history))
                         }
                         (ExternalSourceConnector::Kinesis(_), Consistency::BringYourOwn(_)) => {
                             log::error!("BYO timestamping not supported for Kinesis sources");
@@ -772,9 +772,9 @@ where
                                 panic!("Unexpected message type. Expected BYO update.")
                             }
                         }
-                        TimestampDataUpdate::RealTime(partitions) => {
+                        TimestampDataUpdate::RealTime(history) => {
                             if let TimestampSourceUpdate::RealTime(new_partition) = update {
-                                partitions.insert(new_partition);
+                                history.add_partition(new_partition);
                             } else {
                                 panic!("Expected message type. Expected RT update.");
                             }

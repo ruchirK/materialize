@@ -10,7 +10,7 @@
 //! Types and methods for managing timestamp assignment and invention in sources
 
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::rc::Rc;
 
 use timely::progress::frontier::{Antichain, AntichainRef, MutableAntichain};
@@ -111,6 +111,12 @@ impl TimestampBindingBox {
         entry.push((timestamp, offset));
     }
 
+    fn add_partition(&mut self, partition: PartitionId) {
+        if !self.partitions.contains_key(&partition) {
+            self.partitions.insert(partition, Vec::new());
+        }
+    }
+
     fn get_binding(
         &self,
         partition: &PartitionId,
@@ -201,6 +207,11 @@ impl TimestampBindingRc {
             .add_binding(partition, timestamp, offset);
     }
 
+    /// Add a new partition
+    pub fn add_partition(&self, partition: PartitionId) {
+        self.wrapper.borrow_mut().add_partition(partition);
+    }
+
     /// Get the timestamp assignment for `(partition, offset)` if it is known.
     ///
     /// This function returns the timestamp and the maximum offset for which it is
@@ -250,7 +261,7 @@ impl Clone for TimestampBindingRc {
 /// A type wrapper for a timestamp update
 pub enum TimestampDataUpdate {
     /// RT sources see the current set of partitions known to the source.
-    RealTime(HashSet<PartitionId>),
+    RealTime(TimestampBindingRc),
     /// BYO sources see a list of (Timestamp, MzOffset) timestamp updates
     BringYourOwn(TimestampBindingRc),
 }

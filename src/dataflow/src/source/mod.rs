@@ -711,11 +711,11 @@ impl ConsistencyInfo {
             // capability
             if let Some(entries) = timestamp_histories.borrow().get(&id.source_id) {
                 match entries {
-                    TimestampDataUpdate::RealTime(partitions) => {
-                        for pid in partitions {
-                            if !self.knows_of(pid) && self.responsible_for(pid) {
+                    TimestampDataUpdate::RealTime(history) => {
+                        for pid in history.partitions() {
+                            if !self.knows_of(&pid) && self.responsible_for(&pid) {
                                 source.add_partition(pid.clone());
-                                self.add_partition(pid);
+                                self.add_partition(&pid);
                             }
                         }
                     }
