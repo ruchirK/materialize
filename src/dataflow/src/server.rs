@@ -438,6 +438,25 @@ where
 
     /// Send progress information to the coordinator.
     fn report_frontiers(&mut self) {
+        fn add_progress(
+            id: GlobalId,
+            upper: &Antichain<Timestamp>,
+            lower: &Antichain<Timestamp>,
+            progress: &mut Vec<(GlobalId, ChangeBatch<Timestamp>)>,
+        ) {
+            let mut changes = ChangeBatch::new();
+            for time in lower.elements().iter() {
+                changes.update(time.clone(), -1);
+            }
+            for time in upper.elements().iter() {
+                changes.update(time.clone(), 1);
+            }
+            changes.compact();
+            if !changes.is_empty() {
+                progress.push((id, changes));
+            }
+        }
+
         if let Some(feedback_tx) = &mut self.feedback_tx {
             let mut upper = Antichain::new();
             let mut progress = Vec::new();
@@ -449,17 +468,7 @@ where
                     .get_mut(&id)
                     .expect("Frontier missing!");
                 if lower != &upper {
-                    let mut changes = ChangeBatch::new();
-                    for time in lower.elements().iter() {
-                        changes.update(time.clone(), -1);
-                    }
-                    for time in upper.elements().iter() {
-                        changes.update(time.clone(), 1);
-                    }
-                    changes.compact();
-                    if !changes.is_empty() {
-                        progress.push((*id, changes));
-                    }
+                    add_progress(*id, &upper, &lower, &mut progress);
                     lower.clone_from(&upper);
                 }
             }
@@ -474,17 +483,7 @@ where
                             .get_mut(&id)
                             .expect("Frontier missing!");
                         if lower != &upper {
-                            let mut changes = ChangeBatch::new();
-                            for time in lower.elements().iter() {
-                                changes.update(time.clone(), -1);
-                            }
-                            for time in upper.elements().iter() {
-                                changes.update(time.clone(), 1);
-                            }
-                            changes.compact();
-                            if !changes.is_empty() {
-                                progress.push((*id, changes));
-                            }
+                            add_progress(*id, &upper, &lower, &mut progress);
                             lower.clone_from(&upper);
                         }
                     }
