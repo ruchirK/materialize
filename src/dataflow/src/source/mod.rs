@@ -652,12 +652,13 @@ impl ConsistencyInfo {
         //  We need to determine the maximum timestamp that is fully closed. This corresponds to the minimum of
         //  * closed timestamps across all partitions we own
         //  * maximum bound timestamps across all partitions we don't own (the `upper`)
-        let mut min: Option<Timestamp> =
-            if let Some(time) = timestamp_bindings.get_upper().elements().get(0) {
-                Some(*time)
-            } else {
-                None
-            };
+        let mut upper = Antichain::new();
+        timestamp_bindings.read_upper(&mut upper);
+        let mut min: Option<Timestamp> = if let Some(time) = upper.elements().get(0) {
+            Some(*time)
+        } else {
+            None
+        };
 
         if let Consistency::BringYourOwn(_) = self.source_type {
             // Determine which timestamps have been closed. A timestamp is closed once we have processed

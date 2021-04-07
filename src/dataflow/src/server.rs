@@ -477,7 +477,7 @@ where
                 match source_ts_history {
                     TimestampDataUpdate::RealTime(_) => continue,
                     TimestampDataUpdate::BringYourOwn(history) => {
-                        let upper = history.get_upper();
+                        history.read_upper(&mut upper);
                         let lower = self
                             .reported_source_frontiers
                             .get_mut(&id)

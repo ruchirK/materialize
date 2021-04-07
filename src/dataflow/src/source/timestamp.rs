@@ -131,16 +131,14 @@ impl TimestampBindingBox {
         return None;
     }
 
-    fn get_upper(&self) -> Antichain<Timestamp> {
-        let mut upper = Antichain::new();
+    fn read_upper(&self, target: &mut Antichain<Timestamp>) {
+        target.clear();
 
         for (_, entries) in self.partitions.iter() {
             if let Some((timestamp, _)) = entries.last() {
-                upper.insert(*timestamp);
+                target.insert(*timestamp);
             }
         }
-
-        upper
     }
 
     fn partitions(&self) -> Vec<PartitionId> {
@@ -220,8 +218,8 @@ impl TimestampBindingRc {
     /// Returns the lower bound across every partition's most recent timestamp.
     ///
     /// All subsequent updates will either be at or in advance of this frontier.
-    pub fn get_upper(&self) -> Antichain<Timestamp> {
-        self.wrapper.borrow().get_upper()
+    pub fn read_upper(&self, target: &mut Antichain<Timestamp>) {
+        self.wrapper.borrow().read_upper(target)
     }
 
     /// Returns the list of partitions this source knows about.
