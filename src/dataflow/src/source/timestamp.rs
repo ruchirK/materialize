@@ -87,6 +87,8 @@ impl TimestampBindingBox {
                 }
             }
 
+            // We always keep the last binding around.
+            new_entries.push(*entries.last().expect("known to exist"));
             *entries = new_entries;
         }
     }
