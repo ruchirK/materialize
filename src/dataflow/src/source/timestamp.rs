@@ -192,8 +192,9 @@ impl TimestampBindingRc {
 
     /// Add a new mapping from `(partition, offset) -> timestamp`.
     ///
-    /// Note that the `offset` and `timestamp` both have to be greater than the
-    /// largest previously bound offsets or timestamps for that partition.
+    /// Note that the `timestamp` greater than the largest previously bound
+    /// timestamp for that partition, and `offset` has to be greater than or equal to
+    /// the largest previously bound offset for that partition.
     pub fn add_binding(&self, partition: PartitionId, timestamp: Timestamp, offset: MzOffset) {
         self.wrapper
             .borrow_mut()
