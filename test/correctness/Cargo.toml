@@ -12,7 +12,7 @@ path = "checker.rs"
 [dependencies]
 chrono = { version = "0.4.0", default-features = false, features = ["clock", "std"] }
 env_logger = "0.8.3"
-futures = "0.3.13"
+futures = "0.3.14"
 hyper = "0.14.0"
 lazy_static = "1.4.0"
 log = "0.4.13"
@@ -27,5 +27,5 @@ regex = "1.4.5"
 serde = { version = "1.0.125", features = ["derive"] }
 structopt = "0.3.21"
 tokio = "1.4.0"
-tokio-postgres = "0.7.0"
+tokio-postgres = "0.7.1"
 toml = "0.5.8"

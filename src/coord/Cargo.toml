@@ -14,13 +14,13 @@ build-info = { path = "../build-info" }
 byteorder = "1.4.3"
 ccsr = { path = "../ccsr" }
 chrono = { version = "0.4.0", default-features = false, features = ["std"] }
-crossbeam-channel = "0.5.0"
+crossbeam-channel = "0.5.1"
 dataflow = { path = "../dataflow" }
 dataflow-types = { path = "../dataflow-types" }
 derivative = "2.2.0"
 differential-dataflow = { git = "https://github.com/TimelyDataflow/differential-dataflow.git" }
 expr = { path = "../expr" }
-futures = "0.3.13"
+futures = "0.3.14"
 interchange = { path = "../interchange" }
 itertools = "0.9.0"
 lazy_static = "1.4.0"
@@ -44,7 +44,7 @@ storage = { path = "../storage" }
 symbiosis = { path = "../symbiosis" }
 timely = { git = "https://github.com/TimelyDataflow/timely-dataflow", default-features = false, features = ["bincode"] }
 tokio = "1.4.0"
-tokio-postgres = "0.7"
+tokio-postgres = "0.7.1"
 tokio-stream = "0.1.5"
 transform = { path = "../transform" }
 unicase = "2.6.0"

@@ -7,7 +7,7 @@ publish = false
 
 [dependencies]
 anyhow = "1.0.40"
-aws-arn = "0.1.1"
+aws-arn = "0.2.0"
 aws-util = { path = "../aws-util" }
 build-info = { path = "../build-info" }
 ccsr = { path = "../ccsr" }
@@ -15,7 +15,7 @@ chrono = { version = "0.4.0", default-features = false, features = ["clock", "st
 dataflow-types = { path = "../dataflow-types" }
 enum-kinds = "0.5.0"
 expr = { path = "../expr" }
-futures = "0.3.13"
+futures = "0.3.14"
 globset = "0.4.0"
 interchange = { path = "../interchange" }
 itertools = "0.9.0"
@@ -35,7 +35,7 @@ serde = { version = "1.0.125", features = ["derive"] }
 serde_json = "1.0.64"
 sql-parser = { path = "../sql-parser" }
 tokio = { version = "1.4.0", features = ["fs"] }
-tokio-postgres = "0.7.0"
+tokio-postgres = "0.7.1"
 unicase = "2.6.0"
 url = "2.2.1"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
