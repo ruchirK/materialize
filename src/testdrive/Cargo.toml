@@ -7,7 +7,7 @@ publish = false
 
 [dependencies]
 async-compression = { version = "0.3.7", features = [ "tokio", "gzip" ] }
-async-trait = "0.1.48"
+async-trait = "0.1.50"
 atty = "0.2.0"
 aws-util = { path = "../aws-util" }
 byteorder = "1.4.3"
@@ -16,7 +16,7 @@ ccsr = { path = "../ccsr" }
 chrono = { version = "0.4.0", default-features = false, features = ["std"] }
 coord = { path = "../coord" }
 flate2 = "1.0.20"
-futures = "0.3.13"
+futures = "0.3.14"
 interchange = { path = "../interchange" }
 itertools = "0.9.0"
 kafka-util = { path = "../kafka-util" }
@@ -27,13 +27,13 @@ mz-avro = { path = "../avro", features = ["snappy"] }
 ore = { path = "../ore" }
 parse_duration = "2.1.1"
 pgrepr = { path = "../pgrepr" }
-postgres_array = "0.11.0"
+postgres_array = { git = "https://github.com/MaterializeInc/rust-postgres-array" }
 protobuf = { version = "2.17.0", features = ["with-serde"] }
 rand = "0.8.3"
 rdkafka = { git = "https://github.com/fede1024/rust-rdkafka.git", features = ["cmake-build", "libz-static"] }
 regex = "1.4.5"
 repr = { path = "../repr" }
-reqwest = { version = "0.11.2", features = ["native-tls-vendored"] }
+reqwest = { version = "0.11.3", features = ["native-tls-vendored"] }
 rusoto_core = { git = "https://github.com/rusoto/rusoto.git" }
 rusoto_credential = { git = "https://github.com/rusoto/rusoto.git" }
 rusoto_kinesis = { git = "https://github.com/rusoto/rusoto.git" }
@@ -47,8 +47,8 @@ sql-parser = { path = "../sql-parser" }
 structopt = "0.3.21"
 tempfile = "3.2.0"
 termcolor = "1.1.2"
-tokio = "1.4.0"
-tokio-postgres = { version = "0.7.1", features = ["with-chrono-0_4", "with-serde_json-1"] }
+tokio = "1.5.0"
+tokio-postgres = { git = "https://github.com/MaterializeInc/rust-postgres", features = ["with-chrono-0_4", "with-serde_json-1"] }
 tokio-stream = "0.1.5"
 url = "2.2.1"
 uuid = "0.8.2"
