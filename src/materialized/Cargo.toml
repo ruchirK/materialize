@@ -68,7 +68,7 @@ repr = { path = "../repr" }
 reqwest = { version = "0.11.3", features = ["json"] }
 rlimit = "0.5.4"
 semver = "0.11.0"
-serde = { version = "1.0.125", features = ["derive"] }
+serde = { version = "1.0.126", features = ["derive"] }
 serde_json = "1.0.64"
 shell-words = "1.0.0"
 sql = { path = "../sql" }
@@ -77,9 +77,9 @@ sysctl = "0.4.1"
 sysinfo = "0.17.2"
 tempfile = "3.2.0"
 timely = { git = "https://github.com/TimelyDataflow/timely-dataflow", default-features = false, features = ["bincode"] }
-tokio = { version = "1.5.0", features = ["sync"] }
+tokio = { version = "1.6.0", features = ["sync"] }
 tokio-openssl = "0.6.1"
-tokio-stream = { version = "0.1.5", features = ["net"] }
+tokio-stream = { version = "0.1.6", features = ["net"] }
 tracing = "0.1.25"
 # TODO(benesch): we can use the default features here once tracing-subscriber
 # does not enable chrono's "oldtime" feature.
@@ -123,7 +123,7 @@ flate2 = "1.0.20"
 hex = "0.4.3"
 hex-literal = "0.3.1"
 reqwest = { version = "0.11.3", features = ["blocking"] }
-sha2 = "0.9.4"
+sha2 = "0.9.5"
 tar = "0.4.33"
 walkdir = "2.3.2"
 
