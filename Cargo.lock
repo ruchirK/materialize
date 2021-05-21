@@ -512,9 +512,7 @@ dependencies = [
  "encode_unicode",
  "lazy_static",
  "libc",
- "regex",
  "terminal_size",
- "unicode-width",
  "winapi",
 ]
 
@@ -552,6 +550,7 @@ dependencies = [
  "ore",
  "pgrepr",
  "postgres-types",
+ "postgres-util",
  "prometheus",
  "rand 0.8.3",
  "rdkafka",
@@ -960,7 +959,7 @@ checksum = "524cbf6897b527295dff137cec09ecf3a05f4fddffd7dfcd1585403449e74198"
 [[package]]
 name = "differential-dataflow"
 version = "0.12.0"
-source = "git+https://github.com/TimelyDataflow/differential-dataflow.git#adf4ac7760b6795962eee2364967ec2bd0c2b3e4"
+source = "git+https://github.com/TimelyDataflow/differential-dataflow.git#23b04441b43ce695f4bbaa08305e8af43fcb7345"
 dependencies = [
  "abomonation",
  "abomonation_derive",
@@ -1015,7 +1014,7 @@ checksum = "923dea538cea0aa3025e8685b20d6ee21ef99c4f77e954a30febbaac5ec73a97"
 [[package]]
 name = "dogsdogsdogs"
 version = "0.1.0"
-source = "git+https://github.com/TimelyDataflow/differential-dataflow.git#adf4ac7760b6795962eee2364967ec2bd0c2b3e4"
+source = "git+https://github.com/TimelyDataflow/differential-dataflow.git#23b04441b43ce695f4bbaa08305e8af43fcb7345"
 dependencies = [
  "abomonation",
  "abomonation_derive",
@@ -1822,9 +1821,9 @@ dependencies = [
 
 [[package]]
 name = "indicatif"
-version = "0.16.0"
+version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "507cf157a0dab3c837bef6e2086466255d9de4a6b1af69e62b62c54cd52f6062"
+checksum = "1a27a1329c072947215f58e9bbe6540c2328b5c2e40b34a57104e5e06e7aeabb"
 dependencies = [
  "console",
  "lazy_static",
@@ -1834,9 +1833,9 @@ dependencies = [
 
 [[package]]
 name = "inotify"
-version = "0.9.2"
+version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d19f57db1baad9d09e43a3cd76dcf82ebdafd37d75c9498b87762dba77c93f15"
+checksum = "b031475cb1b103ee221afb806a23d35e0570bf7271d7588762ceba8127ed43b3"
 dependencies = [
  "bitflags",
  "futures-core",
@@ -3989,9 +3988,9 @@ dependencies = [
 
 [[package]]
 name = "serde"
-version = "1.0.125"
+version = "1.0.126"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "558dc50e1a5a5fa7112ca2ce4effcb321b0300c0d4ccf0776a9f60cd89031171"
+checksum = "ec7505abeacaec74ae4778d9d9328fe5a5d04253220a85c4ee022239fc996d03"
 dependencies = [
  "serde_derive",
 ]
@@ -4030,9 +4029,9 @@ dependencies = [
 
 [[package]]
 name = "serde_derive"
-version = "1.0.125"
+version = "1.0.126"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b093b7a2bb58203b5da3056c05b4ec1fed827dcfdb37347a8841695263b3d06d"
+checksum = "963a7dbc9895aeac7ac90e74f34a5d5261828f79df35cbed41e10189d3804d43"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4785,7 +4784,7 @@ dependencies = [
 [[package]]
 name = "timely"
 version = "0.12.0"
-source = "git+https://github.com/TimelyDataflow/timely-dataflow#b619080c6c3d9ec249b2943d56ff4a2d8ce8e121"
+source = "git+https://github.com/TimelyDataflow/timely-dataflow#d14afd6abfe56a434beb24fea42e2c4ccb4f28a3"
 dependencies = [
  "abomonation",
  "abomonation_derive",
@@ -4802,12 +4801,12 @@ dependencies = [
 [[package]]
 name = "timely_bytes"
 version = "0.12.0"
-source = "git+https://github.com/TimelyDataflow/timely-dataflow#b619080c6c3d9ec249b2943d56ff4a2d8ce8e121"
+source = "git+https://github.com/TimelyDataflow/timely-dataflow#d14afd6abfe56a434beb24fea42e2c4ccb4f28a3"
 
 [[package]]
 name = "timely_communication"
 version = "0.12.0"
-source = "git+https://github.com/TimelyDataflow/timely-dataflow#b619080c6c3d9ec249b2943d56ff4a2d8ce8e121"
+source = "git+https://github.com/TimelyDataflow/timely-dataflow#d14afd6abfe56a434beb24fea42e2c4ccb4f28a3"
 dependencies = [
  "abomonation",
  "abomonation_derive",
@@ -4823,7 +4822,7 @@ dependencies = [
 [[package]]
 name = "timely_logging"
 version = "0.12.0"
-source = "git+https://github.com/TimelyDataflow/timely-dataflow#b619080c6c3d9ec249b2943d56ff4a2d8ce8e121"
+source = "git+https://github.com/TimelyDataflow/timely-dataflow#d14afd6abfe56a434beb24fea42e2c4ccb4f28a3"
 
 [[package]]
 name = "tinytemplate"
@@ -4922,9 +4921,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-util"
-version = "0.6.6"
+version = "0.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "940a12c99365c31ea8dd9ba04ec1be183ffe4920102bb7122c2f515437601e8e"
+checksum = "1caa0b0c8d94a049db56b5acf8cba99dc0623aab1b26d5b5f5e2d945846b3592"
 dependencies = [
  "bytes",
  "futures-core",
