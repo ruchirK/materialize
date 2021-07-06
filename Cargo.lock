@@ -151,7 +151,7 @@ checksum = "a88b6bd5df287567ffdf4ddf4d33060048e1068308e5f62d81c6f9824a045a48"
 dependencies = [
  "bstr",
  "doc-comment",
- "predicates",
+ "predicates 1.0.8",
  "predicates-core",
  "predicates-tree",
  "wait-timeout",
@@ -520,7 +520,7 @@ dependencies = [
  "expr",
  "futures",
  "interchange",
- "itertools",
+ "itertools 0.10.1",
  "lazy_static",
  "log",
  "mz-avro",
@@ -549,6 +549,27 @@ dependencies = [
  "uncased",
  "url",
  "uuid",
+]
+
+[[package]]
+name = "coordtest"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "coord",
+ "datadriven",
+ "dataflow",
+ "dataflow-types",
+ "expr",
+ "futures",
+ "ore",
+ "repr",
+ "serde_json",
+ "sql-parser",
+ "structopt",
+ "tempfile",
+ "timely",
+ "tokio",
 ]
 
 [[package]]
@@ -606,7 +627,7 @@ dependencies = [
  "clap",
  "criterion-plot",
  "csv",
- "itertools",
+ "itertools 0.9.0",
  "lazy_static",
  "num-traits",
  "oorandom",
@@ -628,7 +649,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e022feadec601fba1649cfa83586381a4ad31c6bf3a9ab7d408118b05dd9889d"
 dependencies = [
  "cast",
- "itertools",
+ "itertools 0.9.0",
 ]
 
 [[package]]
@@ -745,11 +766,12 @@ dependencies = [
 
 [[package]]
 name = "datadriven"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3746c0c397dd30632405eef04cd5e92693e03279e8189d1922dbf227bcbe66a8"
+checksum = "5c496e3277b660041bd6a2c0618593e99c3ba450b30d5f8d89035f78c87b4106"
 dependencies = [
  "anyhow",
+ "futures",
 ]
 
 [[package]]
@@ -775,7 +797,7 @@ dependencies = [
  "globset",
  "inotify",
  "interchange",
- "itertools",
+ "itertools 0.10.1",
  "kafka-util",
  "lazy_static",
  "log",
@@ -917,7 +939,7 @@ checksum = "524cbf6897b527295dff137cec09ecf3a05f4fddffd7dfcd1585403449e74198"
 [[package]]
 name = "differential-dataflow"
 version = "0.12.0"
-source = "git+https://github.com/TimelyDataflow/differential-dataflow.git#23b04441b43ce695f4bbaa08305e8af43fcb7345"
+source = "git+https://github.com/TimelyDataflow/differential-dataflow.git#9d33cda130421c7c391c2fb9d89c55e8d5752c1f"
 dependencies = [
  "abomonation",
  "abomonation_derive",
@@ -926,6 +948,12 @@ dependencies = [
  "serde_derive",
  "timely",
 ]
+
+[[package]]
+name = "difflib"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6184e33543162437515c2e2b48714794e37845ec9851711914eec9d308f6ebe8"
 
 [[package]]
 name = "digest"
@@ -966,7 +994,7 @@ checksum = "923dea538cea0aa3025e8685b20d6ee21ef99c4f77e954a30febbaac5ec73a97"
 [[package]]
 name = "dogsdogsdogs"
 version = "0.1.0"
-source = "git+https://github.com/TimelyDataflow/differential-dataflow.git#23b04441b43ce695f4bbaa08305e8af43fcb7345"
+source = "git+https://github.com/TimelyDataflow/differential-dataflow.git#9d33cda130421c7c391c2fb9d89c55e8d5752c1f"
 dependencies = [
  "abomonation",
  "abomonation_derive",
@@ -1136,7 +1164,7 @@ dependencies = [
  "enum-iterator",
  "hex",
  "hmac",
- "itertools",
+ "itertools 0.10.1",
  "lowertest",
  "md-5",
  "num_enum",
@@ -1571,9 +1599,9 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hex-literal"
-version = "0.3.1"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5af1f635ef1bc545d78392b136bfe1c9809e029023c84a3638a864a10b8819c8"
+checksum = "76505e26b6ca3bbdbbb360b68472abbb80998c5fa5dc43672eca34f28258e138"
 
 [[package]]
 name = "hmac"
@@ -1744,9 +1772,9 @@ dependencies = [
 
 [[package]]
 name = "include_dir"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23d58bdeb22b1c4691106c084b1063781904c35d0f22eda2a283598968eac61a"
+checksum = "31a924bd335356c7622dff9ee33d06920afcf7f762a1a991236645e08c8a484b"
 dependencies = [
  "glob",
  "include_dir_impl",
@@ -1755,9 +1783,9 @@ dependencies = [
 
 [[package]]
 name = "include_dir_impl"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "327869970574819d24d1dca25c891856144d29159ab797fa9dc725c5c3f57215"
+checksum = "afae3917f781921d7c7813992ccadff7e816f7e6ecb4b70a9ec3e740d51da3d6"
 dependencies = [
  "anyhow",
  "proc-macro-hack",
@@ -1831,7 +1859,7 @@ dependencies = [
  "differential-dataflow",
  "futures",
  "hex",
- "itertools",
+ "itertools 0.10.1",
  "lazy_static",
  "log",
  "mz-avro",
@@ -1863,6 +1891,15 @@ name = "itertools"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "284f18f85651fe11e8a991b2adb42cb078325c996ed026d994719efcfca1d54b"
+dependencies = [
+ "either",
+]
+
+[[package]]
+name = "itertools"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "69ddb889f9d0d08a67338271fa9b62996bc788c7796a5c18cf057420aaed5eaf"
 dependencies = [
  "either",
 ]
@@ -1980,9 +2017,9 @@ dependencies = [
 
 [[package]]
 name = "libc"
-version = "0.2.95"
+version = "0.2.97"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "789da6d93f1b866ffe175afc5322a4d76c038605a1c3319bb57b06967ca98a36"
+checksum = "12b8adadd720df158f4d70dfe7ccc6adb0472d7c55ca83445f6a5ab3e36f8fb6"
 
 [[package]]
 name = "libm"
@@ -2103,6 +2140,7 @@ dependencies = [
  "clap",
  "compile-time-run",
  "coord",
+ "coordtest",
  "crossbeam-channel",
  "datadriven",
  "dataflow",
@@ -2117,7 +2155,7 @@ dependencies = [
  "hyper",
  "hyper-openssl",
  "include_dir",
- "itertools",
+ "itertools 0.10.1",
  "jemallocator",
  "kafka-util",
  "krb5-src",
@@ -2138,7 +2176,7 @@ dependencies = [
  "postgres-openssl",
  "postgres-protocol",
  "postgres_array",
- "predicates",
+ "predicates 2.0.0",
  "prof",
  "prometheus",
  "rand",
@@ -2238,7 +2276,7 @@ name = "metabase-smoketest"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "itertools",
+ "itertools 0.10.1",
  "log",
  "metabase",
  "ore",
@@ -2295,7 +2333,7 @@ dependencies = [
  "digest",
  "enum-kinds",
  "flate2",
- "itertools",
+ "itertools 0.10.1",
  "lazy_static",
  "log",
  "md-5",
@@ -2741,7 +2779,7 @@ dependencies = [
  "dataflow-types",
  "expr",
  "futures",
- "itertools",
+ "itertools 0.10.1",
  "lazy_static",
  "log",
  "openssl",
@@ -2936,7 +2974,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f49cfaf7fdaa3bfacc6fa3e7054e65148878354a5cfddcf661df4c851f8021df"
 dependencies = [
  "difference",
+ "predicates-core",
+]
+
+[[package]]
+name = "predicates"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c6e46ca79eb4e21e2ec14430340c71250ab69332abf85521c95d3a8bc336aa76"
+dependencies = [
+ "difflib",
  "float-cmp",
+ "itertools 0.10.1",
  "normalize-line-endings",
  "predicates-core",
  "regex",
@@ -3385,7 +3434,7 @@ dependencies = [
  "enum-kinds",
  "fast-float",
  "hex",
- "itertools",
+ "itertools 0.10.1",
  "lazy_static",
  "lowertest",
  "num-traits",
@@ -3930,7 +3979,7 @@ dependencies = [
  "futures",
  "globset",
  "interchange",
- "itertools",
+ "itertools 0.10.1",
  "lazy_static",
  "log",
  "mz-avro",
@@ -3960,7 +4009,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "datadriven",
- "itertools",
+ "itertools 0.10.1",
  "lazy_static",
  "log",
  "matches",
@@ -4051,9 +4100,9 @@ checksum = "6446ced80d6c486436db5c078dde11a9f73d42b57fb273121e160b84f63d894c"
 
 [[package]]
 name = "structopt"
-version = "0.3.21"
+version = "0.3.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5277acd7ee46e63e5168a80734c9f6ee81b1367a7d8772a2d765df2a3705d28c"
+checksum = "69b041cdcb67226aca307e6e7be44c8806423d83e018bd662360a93dabce4d71"
 dependencies = [
  "clap",
  "lazy_static",
@@ -4062,9 +4111,9 @@ dependencies = [
 
 [[package]]
 name = "structopt-derive"
-version = "0.4.14"
+version = "0.4.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ba9cdfda491b814720b6b06e0cac513d922fc407582032e8706e9f137976f90"
+checksum = "7813934aecf5f51a54775e00068c237de98489463968231a51746bbbc03f9c10"
 dependencies = [
  "heck",
  "proc-macro-error",
@@ -4291,7 +4340,7 @@ dependencies = [
  "flate2",
  "futures",
  "interchange",
- "itertools",
+ "itertools 0.10.1",
  "kafka-util",
  "krb5-src",
  "lazy_static",
@@ -4300,7 +4349,7 @@ dependencies = [
  "ore",
  "pgrepr",
  "postgres_array",
- "predicates",
+ "predicates 2.0.0",
  "protobuf",
  "protoc",
  "rand",
@@ -4381,7 +4430,7 @@ dependencies = [
 [[package]]
 name = "timely"
 version = "0.12.0"
-source = "git+https://github.com/TimelyDataflow/timely-dataflow#d14afd6abfe56a434beb24fea42e2c4ccb4f28a3"
+source = "git+https://github.com/TimelyDataflow/timely-dataflow#8ba3286357a0d20935aff10241abc80c1677ca21"
 dependencies = [
  "abomonation",
  "abomonation_derive",
@@ -4398,12 +4447,12 @@ dependencies = [
 [[package]]
 name = "timely_bytes"
 version = "0.12.0"
-source = "git+https://github.com/TimelyDataflow/timely-dataflow#d14afd6abfe56a434beb24fea42e2c4ccb4f28a3"
+source = "git+https://github.com/TimelyDataflow/timely-dataflow#8ba3286357a0d20935aff10241abc80c1677ca21"
 
 [[package]]
 name = "timely_communication"
 version = "0.12.0"
-source = "git+https://github.com/TimelyDataflow/timely-dataflow#d14afd6abfe56a434beb24fea42e2c4ccb4f28a3"
+source = "git+https://github.com/TimelyDataflow/timely-dataflow#8ba3286357a0d20935aff10241abc80c1677ca21"
 dependencies = [
  "abomonation",
  "abomonation_derive",
@@ -4419,7 +4468,7 @@ dependencies = [
 [[package]]
 name = "timely_logging"
 version = "0.12.0"
-source = "git+https://github.com/TimelyDataflow/timely-dataflow#d14afd6abfe56a434beb24fea42e2c4ccb4f28a3"
+source = "git+https://github.com/TimelyDataflow/timely-dataflow#8ba3286357a0d20935aff10241abc80c1677ca21"
 
 [[package]]
 name = "tinytemplate"
@@ -4621,7 +4670,7 @@ dependencies = [
  "dataflow-types",
  "expr",
  "expr_test_util",
- "itertools",
+ "itertools 0.10.1",
  "lazy_static",
  "repr",
 ]
@@ -4755,7 +4804,7 @@ dependencies = [
  "anyhow",
  "datadriven",
  "fstrings",
- "itertools",
+ "itertools 0.10.1",
  "ore",
  "quote",
  "syn",
@@ -4952,6 +5001,6 @@ checksum = "ec24a9273d24437afb8e71b16f3d9a5d569193cccdb7896213b59f552f387674"
 dependencies = [
  "cc",
  "glob",
- "itertools",
+ "itertools 0.9.0",
  "libc",
 ]
