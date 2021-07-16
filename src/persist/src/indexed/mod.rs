@@ -355,6 +355,31 @@ impl<K: Data, V: Data, U: Buffer, L: Blob> Indexed<K, V, U, L> {
         // to compact trace.
     }
 
+    /// Allow compaction up to `compaction_frontier`
+    pub fn allow_compaction(&mut self, id: Id, compaction_frontier: u64) -> Result<(), Error> {
+        let trace = self
+            .traces
+            .get_mut(&id)
+            .ok_or_else(|| Error::from(format!("never registered: {:?}", id)))?;
+        let since = trace.since();
+        let as_of = Antichain::from_elem(compaction_frontier);
+
+        if PartialOrder::less_equal(&as_of, &since) {
+            return Err(format!(
+                "invalid compaction frontier: {:?} currently at {:?}",
+                as_of, since
+            )
+            .into());
+        }
+
+        trace.compact(as_of, &mut self.blob)?;
+        // Atomically update the meta with both the trace and future changes.
+        //
+        // TODO: Instead of fully overwriting META each time, this should be
+        // more like a compactable log.
+        self.blob.set_meta(self.serialize_meta())
+    }
+
     /// Appends the given `batch` to the future for `id`, writing the data into
     /// blob storage.
     ///

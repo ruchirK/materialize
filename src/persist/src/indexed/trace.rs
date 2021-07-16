@@ -15,7 +15,6 @@
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use differential_dataflow::lattice::Lattice;
 use differential_dataflow::trace::Description;
 use timely::progress::{Antichain, Timestamp};
 use timely::PartialOrder;
@@ -52,15 +51,11 @@ impl<K: Data, V: Data> BlobTrace<K, V> {
     /// Returns a BlobTrace re-instantiated with the previously serialized
     /// state.
     pub fn new(meta: BlobTraceMeta) -> Self {
-        let mut since = Antichain::from_elem(Timestamp::minimum());
-        for (desc, _) in meta.batches.iter() {
-            since = since.join(desc.since());
-        }
         BlobTrace {
             id: meta.id,
             next_blob_id: meta.next_blob_id,
-            since: since,
-            batches: meta.batches,
+            since: meta.since,
+            batches: meta.batches.clone(),
             _phantom: PhantomData,
         }
     }
@@ -78,6 +73,7 @@ impl<K: Data, V: Data> BlobTrace<K, V> {
             id: self.id,
             batches: self.batches.clone(),
             next_blob_id: self.next_blob_id,
+            since: self.since.clone(),
         }
     }
 
@@ -191,6 +187,7 @@ impl<K: Data, V: Data> BlobTrace<K, V> {
         self.batches
             .retain(|(desc, _)| !PartialOrder::less_equal(desc.upper(), &as_of));
         self.batches.insert(0, (desc, key));
+        self.since = as_of;
 
         // TODO actually clear the unwanted batches from the blob storage
 
